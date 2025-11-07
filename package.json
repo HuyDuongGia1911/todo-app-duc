@@ -1,0 +1,31 @@
+{
+    "private": true,
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4.1.11",
+        "@vitejs/plugin-react": "^4.7.0",
+        "autoprefixer": "^10.4.21",
+        "axios": "^1.1.2",
+        "laravel-vite-plugin": "^0.7.2",
+        "lodash": "^4.17.19",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^4.1.11",
+        "vite": "^4.0.0"
+    },
+    "dependencies": {
+        "@fortawesome/fontawesome-free": "^6.7.2",
+        "admin-lte": "^4.0.0-rc3",
+        "bootstrap": "^5.3.7",
+        "lucide-react": "^0.525.0",
+        "react": "^19.1.0",
+        "react-bootstrap": "^2.10.10",
+        "react-dom": "^19.1.0",
+        "react-icons": "^5.5.0",
+        "react-select": "^5.10.2",
+        "recharts": "^3.1.0",
+        "sweetalert2": "^11.22.2"
+    }
+}

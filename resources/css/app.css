@@ -1,0 +1,239 @@
+
+/* css của bảng tcv và lọc */
+.truncate-cell {
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.thead-small th {
+  font-size: 13px;     
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+.badge-filter {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  color: #212529;
+  border-radius: 2rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-close-filter {
+  background-color: rgba(108, 117, 125, 0.1); /* xám nhạt (thay vì đỏ nhạt) */
+  border: none;
+  border-radius: 50%;
+  padding: 2px;
+  color: #6c757d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.btn-close-filter:hover {
+  background-color: rgba(108, 117, 125, 0.25); 
+}
+
+/* css của các item trong bảng cv(làm mờ) */
+.task-tabs {
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.5rem;
+}
+
+.task-tab {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  color: #6c757d;
+  padding-bottom: 6px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.task-tab:hover {
+  opacity: 1;
+  color: #343a40;
+}
+
+.task-tab.active {
+  color: #212529;
+  opacity: 1;
+  font-weight: 600;
+}
+
+.task-tab .tab-label {
+  margin-right: 6px;
+}
+
+.task-tab .tab-badge {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: white;
+  opacity: 0.8;
+}
+
+.tab-badge.dark { background-color: #343a40; }
+.tab-badge.green { background-color: #28a745; }
+.tab-badge.orange { background-color: #ffc107; color: black; }
+.tab-badge.red { background-color: #dc3545; }
+
+.task-tab .tab-underline {
+  position: absolute;
+  bottom: -10px; 
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: #000;
+  border-radius: 2px;
+  z-index: 2;
+}
+.task-done-row {
+  position: relative;
+}
+
+
+.task-done-row > td:nth-child(-n+9) {
+  opacity: 0.5;
+  font-style: italic;
+}
+.task-done-row td:nth-child(10)::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1000px;
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.4);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+
+
+
+
+
+
+
+
+/* css của các input phần tcv */
+.input-wrapper {
+  position: relative;
+}
+
+.label-inside {
+  position: absolute;
+  top: -8px;
+  left: 12px;
+  background: white;
+  padding: 0 6px;
+  font-size: 13px;
+  color: #6c757d;
+  z-index: 1;
+}
+
+.input-wrapper input,
+.input-wrapper select,
+.input-wrapper textarea {
+  height: 46px;
+  padding-top: 14px;
+}
+
+.input-wrapper .react-select__control {
+  min-height: 46px !important;
+  padding-top: 4px;
+}
+
+
+
+
+/* css của xóa lọc */
+.btn-clear-hover {
+  color: #dc3545;
+  font-weight: bold;
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-clear-hover:hover {
+  background-color: rgba(220, 53, 69, 0.1); /* đỏ nhạt */
+}
+
+.btn-clear-hover .icon {
+  font-size: 16px;
+}
+
+
+
+
+/* Ẩn mũi tên dropdown */
+.no-caret-dropdown::after {
+  display: none !important;
+}
+
+
+/*ẩn tự tạo hiện/ẩn password*/
+input[type="password"]::-ms-reveal,
+input[type="password"]::-webkit-reveal-button,
+input[type="password"]::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
+
+
+/* KPI: gạch ngang và làm mờ khi đã hoàn thành */
+.kpi-done-row { position: relative; }
+
+/* CHỈ làm mờ + italic 3 cột đầu: Tháng, Tên KPI, Tiến độ */
+.kpi-done-row > td:nth-child(-n+3) {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* KHÔNG làm mờ 2 cột sau: Trạng thái + Hành động */
+.kpi-done-row > td:nth-child(n+4) {
+  opacity: 1;
+  font-style: normal;
+}
+
+/* Đường gạch ngang từ cột Tháng đến Tiến độ (không phủ lên Trạng thái/Hành động) */
+.kpi-done-row::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 35%;                 /* chừa phần 2 cột cuối; chỉnh 30–40% tuỳ layout */
+  height: 1px;
+  background-color: rgba(0,0,0,0.4);
+  transform: translateY(-50%);
+  pointer-events: none;       /* không chặn click vào switch / nút */
+  z-index: 1;
+}
+
+/* Phòng trường hợp theme khác vẫn gán opacity vào btn/switch */
+.kpi-done-row .form-check,
+.kpi-done-row .btn {
+  opacity: 1 !important;
+  font-style: normal !important;
+}
