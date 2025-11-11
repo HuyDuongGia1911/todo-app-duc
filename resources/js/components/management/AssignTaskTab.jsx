@@ -86,29 +86,41 @@ export default function AssignTaskTab() {
   const handleCreateUser = async () => {
     const name = form.newUserName.trim();
     if (!name) return Swal.fire("Thiếu tên", "Nhập tên người dùng mới", "warning");
+
     try {
       const res = await fetch("/management/users", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf, Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-TOKEN": csrf,
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           name,
           email: name.replace(/\s+/g, '').toLowerCase() + "@example.com",
-          password: "1",
+          password: "123456", // nên dùng password hợp lệ
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("❌ Server error:", errText);
+        throw new Error("Tạo user thất bại");
+      }
+
       const newUser = await res.json();
-      setUsers(prev => [...prev, newUser]);
-      setForm(prev => ({
+      setUsers((prev) => [...prev, newUser]);
+      setForm((prev) => ({
         ...prev,
         newUserName: "",
         user_ids: [...prev.user_ids, newUser.id],
       }));
       Swal.fire("Thành công", "Đã tạo user mới", "success");
     } catch (e) {
-      Swal.fire("Lỗi", "Tạo user thất bại", "error");
+      Swal.fire("Lỗi", "Không thể tạo user, xem console để biết thêm chi tiết", "error");
     }
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
