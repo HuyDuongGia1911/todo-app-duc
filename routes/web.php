@@ -68,7 +68,7 @@ Route::middleware(['auth'])->group(function () {
         // ---- TASKS (mới) ----
         Route::get('/management/tasks',            [TaskAdminController::class, 'index']);
         Route::post('/management/tasks',            [TaskAdminController::class, 'store']);
-        Route::post('/management/tasks/{task}',     [TaskAdminController::class, 'update']);   // dùng POST + _method=PUT từ FE
+        Route::put('/management/tasks/{task}', [TaskAdminController::class, 'update']);
         Route::delete('/management/tasks/{task}',     [TaskAdminController::class, 'destroy']);
 
         // ---- KPI (VIEW + API tách riêng) ----

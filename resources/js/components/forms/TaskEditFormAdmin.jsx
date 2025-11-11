@@ -85,7 +85,7 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
       };
 
       const res = await fetch(`/management/tasks/${task.id}`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
