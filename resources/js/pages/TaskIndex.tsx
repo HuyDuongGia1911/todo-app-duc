@@ -62,7 +62,7 @@ export default function TaskIndex({ tasks }: Props) {
   const currentUserName = (document.querySelector('meta[name="current-user"]')?.getAttribute('content')) || 'admin';
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const itemsPerPage = 7;
-
+// duc
   useEffect(() => {
     setCurrentPage(1);
   }, [tab, priorityFilter, taskDateStart, taskDateEnd]);
