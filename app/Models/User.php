@@ -43,4 +43,10 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'is_admin' => 'boolean',
     ];
+    public function tasks()
+    {
+        return $this->belongsToMany(Task::class, 'task_user')
+            ->withPivot(['progress', 'status'])
+            ->withTimestamps();
+    }
 }

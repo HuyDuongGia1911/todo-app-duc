@@ -345,62 +345,62 @@ export default function TasksTab() {
         </div>
 
         {/* Filters */}
-       <div className="row align-items-center mb-3">
-  {/* Người dùng - NEW */}
-  <div className="col-md-3">
-    <Select
-      isClearable
-      value={userFilter}
-      onChange={setUserFilter}
-      options={users.map(u => ({ value: String(u.id), label: u.name }))}
-      placeholder="Người dùng"
-      classNamePrefix="react-select"
-    />
-  </div>
+        <div className="row align-items-center mb-3">
+          {/* Người dùng - NEW */}
+          <div className="col-md-3">
+            <Select
+              isClearable
+              value={userFilter}
+              onChange={setUserFilter}
+              options={users.map(u => ({ value: String(u.id), label: u.name }))}
+              placeholder="Người dùng"
+              classNamePrefix="react-select"
+            />
+          </div>
 
-  {/* Ưu tiên */}
-  <div className="col-md-3">
-    <Select
-      isClearable
-      value={priorityFilter}
-      onChange={setPriorityFilter}
-      options={["Khẩn cấp", "Cao", "Trung bình", "Thấp"].map(p => ({ value: p, label: p }))}
-      placeholder="Độ ưu tiên"
-      classNamePrefix="react-select"
-    />
-  </div>
+          {/* Ưu tiên */}
+          <div className="col-md-3">
+            <Select
+              isClearable
+              value={priorityFilter}
+              onChange={setPriorityFilter}
+              options={["Khẩn cấp", "Cao", "Trung bình", "Thấp"].map(p => ({ value: p, label: p }))}
+              placeholder="Độ ưu tiên"
+              classNamePrefix="react-select"
+            />
+          </div>
 
-  <div className="col-md-3">
-    <Form.Control
-      type="date"
-      value={taskDateStart}
-      onChange={(e) => setTaskDateStart(e.target.value)}
-      placeholder="Từ ngày"
-    />
-  </div>
-  <div className="col-md-3">
-    <Form.Control
-      type="date"
-      value={taskDateEnd}
-      onChange={(e) => setTaskDateEnd(e.target.value)}
-      placeholder="Đến ngày"
-    />
-  </div>
+          <div className="col-md-3">
+            <Form.Control
+              type="date"
+              value={taskDateStart}
+              onChange={(e) => setTaskDateStart(e.target.value)}
+              placeholder="Từ ngày"
+            />
+          </div>
+          <div className="col-md-3">
+            <Form.Control
+              type="date"
+              value={taskDateEnd}
+              onChange={(e) => setTaskDateEnd(e.target.value)}
+              placeholder="Đến ngày"
+            />
+          </div>
 
-  <div className="col-md-3 mt-3">
-    <Form onSubmit={(e) => e.preventDefault()}>
-      <Form.Control
-        type="text"
-        value={searchKeyword}
-        onChange={(e) => {
-          setSearchKeyword(e.target.value);
-          setCurrentPage(1);
-        }}
-        placeholder="Tìm công việc..."
-      />
-    </Form>
-  </div>
-</div>
+          <div className="col-md-3 mt-3">
+            <Form onSubmit={(e) => e.preventDefault()}>
+              <Form.Control
+                type="text"
+                value={searchKeyword}
+                onChange={(e) => {
+                  setSearchKeyword(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Tìm công việc..."
+              />
+            </Form>
+          </div>
+        </div>
 
         {(tab !== "all" || priorityFilter || taskDateStart || taskDateEnd || searchKeyword) && (
           <>
@@ -488,14 +488,14 @@ export default function TasksTab() {
                 <th className="truncate-cell">Task</th>
                 <th className="truncate-cell">Ca</th>
                 <th className="truncate-cell">Loại</th>
-                <th className="truncate-cell">Người dùng</th>
+                <th className="truncate-cell">Người nhận</th>
                 <th className="truncate-cell">Người giao</th>
                 <th className="truncate-cell">Phụ trách</th>
                 <th className="truncate-cell">Tiến độ</th>
                 <th className="truncate-cell">Ưu tiên</th>
                 <th className="truncate-cell">Chi tiết</th>
                 <th className="truncate-cell">File</th>
-                <th className="truncate-cell">Trạng thái</th>
+
                 <th className="truncate-cell">Hành động</th>
               </tr>
             </thead>
@@ -513,7 +513,7 @@ export default function TasksTab() {
                   const s = resolveSupervisor(t.supervisor || t.user?.name);
 
                   return (
-                    <tr key={t.id} className={t.status === "Đã hoàn thành" ? "task-done-row" : ""}>
+                    <tr key={t.id}>
                       <td className="text-center truncate-cell" title={formatDate(t.task_date)}>
                         {formatDate(t.task_date)}
                       </td>
@@ -532,18 +532,51 @@ export default function TasksTab() {
 
                       {/* Người dùng */}
                       <td className="text-center">
-                        <div className="d-flex align-items-center gap-2 justify-content-center truncate-cell" title={u.name}>
-                          <img src={u.avatar} alt="avatar" width="32" height="32" className="rounded-circle shadow-sm" />
-                          <span className="text-truncate">{u.name}</span>
-                        </div>
+                        {Array.isArray(t.users) && t.users.length > 0 ? (
+                          <div className="d-flex flex-column align-items-center">
+                            {t.users.map((u2, idx) => {
+                              const resolved = resolveUserByNameOrId(u2);
+                              return (
+                                <div key={idx} className="d-flex align-items-center gap-1">
+                                  <img
+                                    src={resolved.avatar}
+                                    width="24"
+                                    height="24"
+                                    className="rounded-circle"
+                                  />
+                                  <span className="text-truncate">{resolved.name}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-muted">—</div>
+                        )}
                       </td>
+
 
                       {/* Người giao */}
                       <td className="text-center">
-                        <div className="d-flex align-items-center gap-2 justify-content-center truncate-cell" title={a.name}>
-                          <img src={a.avatar} alt="avatar" width="32" height="32" className="rounded-circle shadow-sm" />
-                          <span className="text-truncate">{a.name}</span>
-                        </div>
+                        {Array.isArray(t.users) && t.users.length > 0 ? (
+                          <div className="d-flex flex-column align-items-center">
+                            {t.users.map((u2, idx) => {
+                              const resolved = resolveUserByNameOrId(u2);
+                              return (
+                                <div key={idx} className="d-flex align-items-center gap-1">
+                                  <img
+                                    src={resolved.avatar}
+                                    width="24"
+                                    height="24"
+                                    className="rounded-circle"
+                                  />
+                                  <span className="text-truncate">{resolved.name}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-muted">—</div>
+                        )}
                       </td>
 
                       {/* Phụ trách */}
@@ -566,21 +599,14 @@ export default function TasksTab() {
                       <td className="text-center truncate-cell" title={t.file_link || "-"}>
                         {t.file_link
                           ? t.file_link.split(",").map((link, i) => (
-                              <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer">
-                                Link {i + 1}
-                                <br />
-                              </a>
-                            ))
+                            <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer">
+                              Link {i + 1}
+                              <br />
+                            </a>
+                          ))
                           : "-"}
                       </td>
-                      <td className="text-center">
-                        <Form.Check
-                          type="switch"
-                          id={`admin-task-${t.id}`}
-                          checked={t.status === "Đã hoàn thành"}
-                          onChange={() => handleToggleStatus(t)}
-                        />
-                      </td>
+
 
                       {/* Hành động: Sửa + Xoá (không còn dấu 3 chấm/Export) */}
                       <td className="text-center">

@@ -36,7 +36,7 @@ Route::middleware(['auth'])->group(function () {
     //  kpi quản lý
     Route::get('/kpis/export', [KPIController::class, 'export'])->name('kpis.export'); //lí do đặt trước là do resource che mất
     Route::get('/kpis/{kpi}/json', [KPIController::class, 'showJson']);
-   Route::resource('kpis', KPIController::class);
+    Route::resource('kpis', KPIController::class);
 
 
 
@@ -44,6 +44,7 @@ Route::middleware(['auth'])->group(function () {
     //cap nha trang thai
     Route::post('/tasks/{task}/status', [TaskController::class, 'updateStatus']);
     Route::post('/kpis/{kpi}/status', [KPIController::class, 'updateStatus']);
+    Route::post('/tasks/{task}/user-status', [TaskController::class, 'updateUserStatus']);
     //them 
     Route::post('/tasks/check-exist', [TaskController::class, 'checkExist'])->name('tasks.check-exist');
     //tong ket
@@ -69,47 +70,46 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/management/tasks',            [TaskAdminController::class, 'store']);
         Route::post('/management/tasks/{task}',     [TaskAdminController::class, 'update']);   // dùng POST + _method=PUT từ FE
         Route::delete('/management/tasks/{task}',     [TaskAdminController::class, 'destroy']);
-        
-       // ---- KPI (VIEW + API tách riêng) ----
 
-// 1) VIEW trang để React mount
-Route::get('/management/kpis', fn () => view('management.kpis'))
-    ->name('management.kpis');
+        // ---- KPI (VIEW + API tách riêng) ----
 
-// 2) API JSON cho React
-Route::prefix('management/kpis')->group(function () {
-    Route::get('/data', [KpiAdminController::class, 'index']);      // trả JSON list
-    Route::post('/',     [KpiAdminController::class, 'store']);      // tạo
-    Route::put('/{kpi}', [KpiAdminController::class, 'update']);     // sửa
-    Route::delete('/{kpi}', [KpiAdminController::class, 'destroy']); // xoá
-});
-        
+        // 1) VIEW trang để React mount
+        Route::get('/management/kpis', fn() => view('management.kpis'))
+            ->name('management.kpis');
+
+        // 2) API JSON cho React
+        Route::prefix('management/kpis')->group(function () {
+            Route::get('/data', [KpiAdminController::class, 'index']);      // trả JSON list
+            Route::post('/',     [KpiAdminController::class, 'store']);      // tạo
+            Route::put('/{kpi}', [KpiAdminController::class, 'update']);     // sửa
+            Route::delete('/{kpi}', [KpiAdminController::class, 'destroy']); // xoá
+        });
     });
     // ---- REPORTS (VIEW + API) -----
 
-// 1) View để React mount (đã có Blade <div id="management-reports-app"></div>)
-Route::get('/management/reports', fn () => view('management.reports'))
-    ->name('management.reports');
+    // 1) View để React mount (đã có Blade <div id="management-reports-app"></div>)
+    Route::get('/management/reports', fn() => view('management.reports'))
+        ->name('management.reports');
 
-// 2) API JSON cho ReportsTab
-Route::prefix('management/reports')->group(function () {
-    Route::get('/data', [ReportAdminController::class, 'index']);          // list + filter + paginate
-    Route::post('/{report}/unlock', [ReportAdminController::class, 'unlock']); // gỡ "Chốt"
-});
-
-   // ===== ASSIGN (trang + API) =====
-Route::middleware(['auth', 'is_admin'])
-    ->prefix('management/assign')
-    ->group(function () {
-        // Trang Blade để mount React
-        Route::get('/', fn () => view('management.assign'))->name('management.assign');
-
-        // API JSON cho AssignTaskTab
-        Route::get('/tasks',    [AssignTaskController::class, 'index']);
-        Route::post('/tasks',   [AssignTaskController::class, 'store']);
-        Route::put('/tasks/{task}', [AssignTaskController::class, 'update']);
-        Route::delete('/tasks/{task}', [AssignTaskController::class, 'destroy']);
+    // 2) API JSON cho ReportsTab
+    Route::prefix('management/reports')->group(function () {
+        Route::get('/data', [ReportAdminController::class, 'index']);          // list + filter + paginate
+        Route::post('/{report}/unlock', [ReportAdminController::class, 'unlock']); // gỡ "Chốt"
     });
+
+    // ===== ASSIGN (trang + API) =====
+    Route::middleware(['auth', 'is_admin'])
+        ->prefix('management/assign')
+        ->group(function () {
+            // Trang Blade để mount React
+            Route::get('/', fn() => view('management.assign'))->name('management.assign');
+
+            // API JSON cho AssignTaskTab
+            Route::get('/tasks',    [AssignTaskController::class, 'index']);
+            Route::post('/tasks',   [AssignTaskController::class, 'store']);
+            Route::put('/tasks/{task}', [AssignTaskController::class, 'update']);
+            Route::delete('/tasks/{task}', [AssignTaskController::class, 'destroy']);
+        });
     //user profile
     Route::get('/my-profile', [UserProfileController::class, 'index'])->name('profile.view'); // View React mount
     Route::get('/my-profile/info', [UserProfileController::class, 'show']);
@@ -168,4 +168,6 @@ Route::prefix('api')->middleware('auth')->group(function () {
     Route::get('/users', function () {
         return User::select('id', 'name', 'email', 'avatar')->get();
     });
+    // web.php
+    Route::post('/tasks/{task}/user-status', [TaskController::class, 'updateUserStatus']);
 });
