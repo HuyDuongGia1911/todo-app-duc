@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <title>Todo App</title>
@@ -14,10 +15,12 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <style>
-    html, body {
+    html,
+    body {
       height: 100%;
       margin: 0;
-      overflow: hidden; /* Ngăn cuộn toàn trang */
+      overflow: hidden;
+      /* Ngăn cuộn toàn trang */
       background-color: #f8f9fa;
     }
 
@@ -94,182 +97,188 @@
       transform: translateY(-50%);
       border-radius: 50%;
       z-index: 999;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
     }
-      /* submenu trong Quản lý */
-  #mgmtMenu .nav-link {
-    font-weight: 500;
-    font-size: 14px;
-    color: #e9ecef;
-    border-radius: 6px;
-  }
-  #mgmtMenu .nav-link:hover {
-    background-color: #495057;
-    color: #fff;
-  }
-  /* chevron xoay khi mở */
-  a[aria-controls="mgmtMenu"][aria-expanded="true"] .bi-chevron-down {
-    transform: rotate(180deg);
-    transition: transform .2s ease;
-  }
+
+    /* submenu trong Quản lý */
+    #mgmtMenu .nav-link {
+      font-weight: 500;
+      font-size: 14px;
+      color: #e9ecef;
+      border-radius: 6px;
+    }
+
+    #mgmtMenu .nav-link:hover {
+      background-color: #495057;
+      color: #fff;
+    }
+
+    /* chevron xoay khi mở */
+    a[aria-controls="mgmtMenu"][aria-expanded="true"] .bi-chevron-down {
+      transform: rotate(180deg);
+      transition: transform .2s ease;
+    }
   </style>
 </head>
 
 <body>
-<div class="app-wrapper">
+  <div class="app-wrapper">
 
-  <!-- Sidebar -->
-  <div id="sidebar" class="sidebar position-relative p-3">
-    <!-- Nút toggle -->
-    <button id="sidebarToggleBtn" class="btn btn-sm btn-light text-dark toggle-sidebar-btn" onclick="toggleSidebar()" title="Thu gọn / Mở rộng sidebar">
-      <i class="bi bi-chevron-left" id="sidebarToggleIcon"></i>
-    </button>
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar position-relative p-3">
+      <!-- Nút toggle -->
+      <button id="sidebarToggleBtn" class="btn btn-sm btn-light text-dark toggle-sidebar-btn" onclick="toggleSidebar()" title="Thu gọn / Mở rộng sidebar">
+        <i class="bi bi-chevron-left" id="sidebarToggleIcon"></i>
+      </button>
 
-    <div class="text-center mb-4 mt-3">
-      <i class="bi bi-check2-square fs-3"></i>
-      <div class="fw-bold mt-2">TODO APP</div>
+      <div class="text-center mb-4 mt-3">
+        <i class="bi bi-check2-square fs-3"></i>
+        <div class="fw-bold mt-2">TODO APP</div>
+      </div>
+      <hr class="border-light my-2 opacity-25">
+      <!-- Avatar + Tên người dùng: căn giữa trái thật sự -->
+      <div class="mb-4 px-2">
+        <div class="d-flex align-items-center" style="height: 48px;">
+          @php
+          $avatarPath = Auth::user()->avatar
+          ? asset('storage/' . Auth::user()->avatar)
+          : 'https://www.w3schools.com/howto/img_avatar.png';
+          @endphp
+
+          <img
+            src="{{ $avatarPath }}"
+            alt="Avatar"
+            class="rounded-circle shadow-sm me-2"
+            width="48"
+            height="48"
+            onerror="this.onerror=null;this.src='https://www.w3schools.com/howto/img_avatar.png';" />
+
+
+
+          <div class="fw-semibold text-white">
+            {{ Auth::user()->name ?? 'Khách' }}
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Phân cách avatar & menu -->
+      <hr class="border-light opacity-25 my-2">
+      <ul class="nav nav-pills flex-column gap-2">
+        <li><a href="/dashboard" class="nav-link {{ request()->is('dashboard') ? 'active' : '' }}"><i class="bi bi-house-door-fill"></i> Trang chủ</a></li>
+        <li><a href="/tasks" class="nav-link {{ request()->is('tasks*') ? 'active' : '' }}"><i class="bi bi-journal-text"></i> Công việc</a></li>
+        <li><a href="/kpis" class="nav-link {{ request()->is('kpis*') ? 'active' : '' }}"><i class="bi bi-speedometer2"></i> KPI</a></li>
+        <li><a href="/summaries" class="nav-link {{ request()->is('summaries*') ? 'active' : '' }}"><i class="bi bi-clipboard-check"></i> Báo cáo</a></li>
+
+
+        @auth
+        @if(in_array(Auth::user()->role, ['Admin', 'Trưởng phòng']))
+        <li>
+          <a class="nav-link d-flex justify-content-between align-items-center"
+            data-bs-toggle="collapse"
+            href="#mgmtMenu"
+            role="button"
+            aria-expanded="{{ request()->is('management*') ? 'true' : 'false' }}"
+            aria-controls="mgmtMenu">
+            <span><i class="bi bi-gear-fill me-2"></i> Quản lý</span>
+            <i class="bi bi-chevron-down small"></i>
+          </a>
+
+          <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenu">
+            <ul class="list-unstyled ps-3 mb-0">
+              <li>
+                <a href="/management/users"
+                  class="nav-link py-1 {{ request()->is('management/users') ? 'active' : '' }}">
+                  <i class="bi bi-people me-2"></i> Người dùng
+                </a>
+              </li>
+              <li>
+                <a href="/management/tasks"
+                  class="nav-link py-1 {{ request()->is('management/tasks') ? 'active' : '' }}">
+                  <i class="bi bi-journal-text me-2"></i> Công việc
+                </a>
+              </li>
+              <li>
+                <a href="/management/kpis"
+                  class="nav-link py-1 {{ request()->is('management/kpis') ? 'active' : '' }}">
+                  <i class="bi bi-speedometer2 me-2"></i> KPI
+                </a>
+              </li>
+              <li>
+                <a href="/management/reports"
+                  class="nav-link py-1 {{ request()->is('management/reports') ? 'active' : '' }}">
+                  <i class="bi bi-clipboard-check me-2"></i> Báo cáo
+                </a>
+              </li>
+              <li>
+                <a href="/management/assign"
+                  class="nav-link py-1 {{ request()->is('management/assign') ? 'active' : '' }}">
+                  <i class="bi bi-send-check me-2"></i> Giao việc
+                </a>
+              </li>
+            </ul>
+          </div>
+        </li>
+        @endif
+        @endauth
+
+        <li>
+          <a href="/my-profile" class="nav-link {{ request()->is('my-profile') ? 'active' : '' }}">
+            <i class="bi bi-person-circle"></i> Hồ sơ cá nhân
+          </a>
+        </li>
+
+
+        <li class="mt-4">
+          <a href="/logout" class="nav-link text-danger"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </li>
+      </ul>
     </div>
-    <hr class="border-light my-2 opacity-25">
-<!-- Avatar + Tên người dùng: căn giữa trái thật sự -->
-<div class="mb-4 px-2">
-  <div class="d-flex align-items-center" style="height: 48px;">
- @php
-  $avatarPath = Auth::user()->avatar 
-      ? asset('storage/' . Auth::user()->avatar) 
-      : 'https://www.w3schools.com/howto/img_avatar.png';
-@endphp
 
-<img
-  src="{{ $avatarPath }}"
-  alt="Avatar"
-  class="rounded-circle shadow-sm me-2"
-  width="48"
-  height="48"
-  onerror="this.onerror=null;this.src='https://www.w3schools.com/howto/img_avatar.png';"
-/>
-
-
-
-    <div class="fw-semibold text-white">
-      {{ Auth::user()->name ?? 'Khách' }}
-    </div>
-  </div>
-</div>
-
-
-
-<!-- Phân cách avatar & menu -->
-<hr class="border-light opacity-25 my-2">
-    <ul class="nav nav-pills flex-column gap-2">
-      <li><a href="/dashboard" class="nav-link {{ request()->is('dashboard') ? 'active' : '' }}"><i class="bi bi-house-door-fill"></i> Trang chủ</a></li>
-      <li><a href="/tasks" class="nav-link {{ request()->is('tasks*') ? 'active' : '' }}"><i class="bi bi-journal-text"></i> Công việc</a></li>
-      <li><a href="/kpis" class="nav-link {{ request()->is('kpis*') ? 'active' : '' }}"><i class="bi bi-speedometer2"></i> KPI</a></li>
-      <li><a href="/summaries" class="nav-link {{ request()->is('summaries*') ? 'active' : '' }}"><i class="bi bi-clipboard-check"></i> Báo cáo</a></li>
-      
-  
-  @auth
-@if(Auth::user()->is_admin)
-<li>
-  <a class="nav-link d-flex justify-content-between align-items-center"
-     data-bs-toggle="collapse"
-     href="#mgmtMenu"
-     role="button"
-     aria-expanded="{{ request()->is('management*') ? 'true' : 'false' }}"
-     aria-controls="mgmtMenu">
-    <span><i class="bi bi-gear-fill me-2"></i> Quản lý</span>
-    <i class="bi bi-chevron-down small"></i>
-  </a>
-
-  <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenu">
-    <ul class="list-unstyled ps-3 mb-0">
-      <li>
-        <a href="/management/users"
-           class="nav-link py-1 {{ request()->is('management/users') ? 'active' : '' }}">
-          <i class="bi bi-people me-2"></i> Người dùng
-        </a>
-      </li>
-      <li>
-        <a href="/management/tasks"
-           class="nav-link py-1 {{ request()->is('management/tasks') ? 'active' : '' }}">
-          <i class="bi bi-journal-text me-2"></i> Công việc
-        </a>
-      </li>
-      <li>
-        <a href="/management/kpis"
-           class="nav-link py-1 {{ request()->is('management/kpis') ? 'active' : '' }}">
-          <i class="bi bi-speedometer2 me-2"></i> KPI
-        </a>
-      </li>
-      <li>
-        <a href="/management/reports"
-           class="nav-link py-1 {{ request()->is('management/reports') ? 'active' : '' }}">
-          <i class="bi bi-clipboard-check me-2"></i> Báo cáo
-        </a>
-      </li>
-      <li>
-        <a href="/management/assign"
-           class="nav-link py-1 {{ request()->is('management/assign') ? 'active' : '' }}">
-          <i class="bi bi-send-check me-2"></i> Giao việc
-        </a>
-      </li>
-    </ul>
-  </div>
-</li>
-@endif
-@endauth
-
-      <li>
-  <a href="/my-profile" class="nav-link {{ request()->is('my-profile') ? 'active' : '' }}">
-    <i class="bi bi-person-circle"></i> Hồ sơ cá nhân
-  </a>
-</li>
-
-
-      <li class="mt-4">
-        <a href="/logout" class="nav-link text-danger"><i class="bi bi-box-arrow-right"></i> Logout</a>
-      </li>
-    </ul>
-  </div>
-
-  <!-- Nội dung chính -->
-  <div class="main-content">
-    <div class="topbar">
-      @if(session('success'))
+    <!-- Nội dung chính -->
+    <div class="main-content">
+      <div class="topbar">
+        @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
           {{ session('success') }}
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-      @endif
-     
-    </div>
+        @endif
 
-    <div class="content-area">
-      @yield('content')
+      </div>
+
+      <div class="content-area">
+        @yield('content')
+      </div>
     </div>
   </div>
-</div>
+  <script>
+    window.currentUserRole = "{{ Auth::user()->role ?? '' }}";
+  </script>
 
-<!-- Toggle Sidebar Script -->
-<script>
-  function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const icon = document.getElementById('sidebarToggleIcon');
+  <!-- Toggle Sidebar Script -->
+  <script>
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const icon = document.getElementById('sidebarToggleIcon');
 
-    const isHidden = sidebar.classList.toggle('hidden');
-    icon.classList.toggle('bi-chevron-left', !isHidden);
-    icon.classList.toggle('bi-chevron-right', isHidden);
-  }
+      const isHidden = sidebar.classList.toggle('hidden');
+      icon.classList.toggle('bi-chevron-left', !isHidden);
+      icon.classList.toggle('bi-chevron-right', isHidden);
+    }
 
-  window.onload = () => {
-    const sidebar = document.getElementById('sidebar');
-    const icon = document.getElementById('sidebarToggleIcon');
-    const isHidden = sidebar.classList.contains('hidden');
-    icon.classList.toggle('bi-chevron-left', !isHidden);
-    icon.classList.toggle('bi-chevron-right', isHidden);
-  };
-</script>
+    window.onload = () => {
+      const sidebar = document.getElementById('sidebar');
+      const icon = document.getElementById('sidebarToggleIcon');
+      const isHidden = sidebar.classList.contains('hidden');
+      icon.classList.toggle('bi-chevron-left', !isHidden);
+      icon.classList.toggle('bi-chevron-right', isHidden);
+    };
+  </script>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-@yield('scripts')
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  @yield('scripts')
 </body>
+
 </html>

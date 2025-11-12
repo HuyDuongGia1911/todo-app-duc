@@ -58,7 +58,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/summaries/{summary}/export', [MonthlySummaryController::class, 'exportById']);
 
     //admin
-    Route::middleware(['auth', 'is_admin'])->group(function () {
+    Route::middleware(['auth', 'role:Admin,Trưởng phòng'])->group(function () {
         Route::get('/management', fn() => view('management.index'))->name('management');
         // ---- USERS
         Route::get('/management/users', [UserController::class, 'index']);
@@ -98,7 +98,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ===== ASSIGN (trang + API) =====
-    Route::middleware(['auth', 'is_admin'])
+    Route::middleware(['auth', 'role:Admin,Trưởng phòng'])
         ->prefix('management/assign')
         ->group(function () {
             // Trang Blade để mount React
