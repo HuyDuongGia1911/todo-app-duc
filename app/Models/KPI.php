@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class KPI extends Model
 {
     protected $table = 'kpis';
-    protected $fillable = ['start_date', 'end_date', 'name', 'task_names', 'target_progress', 'note','user_id',];
+    protected $fillable = ['start_date', 'end_date', 'name', 'task_names', 'target_progress', 'note', 'user_id',];
 
     public function getTaskNamesArray()
     {
@@ -16,6 +16,6 @@ class KPI extends Model
 
     public function tasks()
     {
-         return $this->hasMany(KPITask::class, 'kpi_id');
+        return $this->hasMany(KPITask::class, 'kpi_id');
     }
 }
