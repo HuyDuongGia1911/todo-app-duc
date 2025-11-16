@@ -530,7 +530,7 @@ export default function TasksTab() {
                         {t.type || "-"}
                       </td>
 
-                      {/* Người dùng */}
+                      {/* Người nhận */}
                       <td className="text-center">
                         {Array.isArray(t.users) && t.users.length > 0 ? (
                           <div className="d-flex flex-column align-items-center">
@@ -538,12 +538,7 @@ export default function TasksTab() {
                               const resolved = resolveUserByNameOrId(u2);
                               return (
                                 <div key={idx} className="d-flex align-items-center gap-1">
-                                  <img
-                                    src={resolved.avatar}
-                                    width="24"
-                                    height="24"
-                                    className="rounded-circle"
-                                  />
+                                  <img src={resolved.avatar} width="24" height="24" className="rounded-circle" />
                                   <span className="text-truncate">{resolved.name}</span>
                                 </div>
                               );
@@ -553,16 +548,15 @@ export default function TasksTab() {
                           <div className="text-muted">—</div>
                         )}
                       </td>
-
 
                       {/* Người giao */}
                       <td className="text-center">
-                        {Array.isArray(t.users) && t.users.length > 0 ? (
-                          <div className="d-flex flex-column align-items-center">
-                            {t.users.map((u2, idx) => {
-                              const resolved = resolveUserByNameOrId(u2);
-                              return (
-                                <div key={idx} className="d-flex align-items-center gap-1">
+                        {t.assigned_by_user ? (
+                          (() => {
+                            const resolved = resolveUserByNameOrId(t.assigned_by_user);
+                            return (
+                              <div className="d-flex flex-column align-items-center">
+                                <div className="d-flex align-items-center gap-1">
                                   <img
                                     src={resolved.avatar}
                                     width="24"
@@ -571,13 +565,14 @@ export default function TasksTab() {
                                   />
                                   <span className="text-truncate">{resolved.name}</span>
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            );
+                          })()
                         ) : (
                           <div className="text-muted">—</div>
                         )}
                       </td>
+
 
                       {/* Phụ trách */}
                       <td className="text-center">

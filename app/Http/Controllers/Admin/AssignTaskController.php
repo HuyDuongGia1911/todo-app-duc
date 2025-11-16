@@ -26,6 +26,10 @@ class AssignTaskController extends Controller
                     ->orWhere('user_id', $uid);
             });
         }
+        // 🔹 Lọc theo NGƯỜI GIAO (từ bộ lọc mới ở FE)
+        if ($request->filled('assigned_by')) {
+            $q->where('assigned_by', (int) $request->assigned_by);
+        }
 
         // tôi là người giao
         if ($request->boolean('mine')) {

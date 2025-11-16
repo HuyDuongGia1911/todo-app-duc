@@ -31,6 +31,7 @@ export default function AssignTaskTab() {
 
   const [filters, setFilters] = useState({
     user_id: null,
+    assigned_by: null,
     start: "",
     end: "",
   });
@@ -75,6 +76,7 @@ export default function AssignTaskTab() {
   const reload = async () => {
     const qs = new URLSearchParams();
     if (filters.user_id) qs.set("user_id", String(filters.user_id));
+    if (filters.assigned_by) qs.set("assigned_by", String(filters.assigned_by));
     if (filters.start) qs.set("start", filters.start);
     if (filters.end) qs.set("end", filters.end);
 
@@ -357,6 +359,18 @@ export default function AssignTaskTab() {
               onChange={(opt) => setFilters(prev => ({ ...prev, user_id: opt?.value || null }))}
             />
           </Col>
+          <Col md={3}>
+            <Select
+              isClearable
+              placeholder="Lọc theo người giao"
+              options={userOptions}
+              value={userOptions.find(o => o.value === filters.assigned_by) || null}
+              onChange={(opt) =>
+                setFilters(prev => ({ ...prev, assigned_by: opt?.value || null }))
+              }
+            />
+          </Col>
+
           <Col md={3}>
             <Form.Control type="date" value={filters.start} onChange={e => setFilters(prev => ({ ...prev, start: e.target.value }))} />
           </Col>
