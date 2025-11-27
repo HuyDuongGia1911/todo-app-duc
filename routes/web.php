@@ -12,6 +12,8 @@ use App\Http\Controllers\Admin\KpiAdminController;
 use App\Http\Controllers\Admin\AssignTaskController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\Admin\ReportAdminController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
+use App\Http\Controllers\Auth\ResetPasswordController;
 // =============================
 // ✔️ AUTH routes
 // =============================
@@ -21,6 +23,10 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/logout', [AuthController::class, 'logout']);
+Route::get('/forgot-password', [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
+Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLinkEmail'])->name('password.email');
+Route::get('/reset-password/{token}', [ResetPasswordController::class, 'showResetForm'])->name('password.reset');
+Route::post('/reset-password', [ResetPasswordController::class, 'reset'])->name('password.update');
 
 // =============================
 // ✔️ APP routes (đã đăng nhập)
