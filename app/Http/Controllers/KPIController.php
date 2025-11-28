@@ -6,8 +6,9 @@ use App\Models\KPI;
 use App\Models\KPITask;
 use App\Models\Task;
 use App\Models\TaskTitle;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class KPIController extends Controller
 {
@@ -29,7 +30,7 @@ class KPIController extends Controller
                 ->whereDate('end_date', $end);
         }
 
-        $kpis = $query->orderBy('end_date')->get();
+        $kpis = $query->orderByDesc('end_date')->get();
         $userId = auth()->id();
 
         foreach ($kpis as $kpi) {
@@ -134,11 +135,7 @@ class KPIController extends Controller
 
         foreach ($kpi->tasks as $t) {
 
-            $actual = Task::whereRaw('LOWER(title) = ?', [strtolower($t->task_title)])
-                ->where('user_id', $userId)
-                ->where('status', 'Đã hoàn thành')
-                ->whereBetween('task_date', [$start, $end])
-                ->sum('progress');
+            $actual = $this->countCompletedTasks($t->task_title, $userId, $start, $end);
 
             $target = $t->target_progress ?: 0;
 
@@ -268,11 +265,7 @@ class KPIController extends Controller
 
         foreach ($kpi->tasks as $t) {
 
-            $actual = Task::whereRaw('LOWER(title) = ?', [strtolower($t->task_title)])
-                ->where('user_id', $userId)
-                ->whereBetween('task_date', [$start, $end])
-                ->where('status', 'Đã hoàn thành')
-                ->sum('progress');
+            $actual = $this->countCompletedTasks($t->task_title, $userId, $start, $end);
 
             $target = $t->target_progress ?: 0;
 
@@ -311,11 +304,7 @@ class KPIController extends Controller
 
         foreach ($kpi->tasks as $task) {
 
-            $actual = Task::whereRaw('LOWER(title) = ?', [strtolower($task->task_title)])
-                ->where('user_id', $userId)
-                ->whereBetween('task_date', [$start, $end])
-                ->where('status', 'Đã hoàn thành')
-                ->sum('progress');
+            $actual = $this->countCompletedTasks($task->task_title, $userId, $start, $end);
 
             $target = $task->target_progress ?: 0;
 
@@ -324,5 +313,33 @@ class KPIController extends Controller
         }
 
         return $totalTarget > 0 ? round(min($totalActual / $totalTarget, 1) * 100) : 0;
+    }
+
+    /**
+     * Helper: Tổng tiến độ task hoàn thành (hỗ trợ cả mô hình pivot & legacy)
+     */
+    private function countCompletedTasks(string $title, int $userId, string $start, string $end): int
+    {
+        $normalizedTitle = strtolower($title);
+
+        // Task được giao qua pivot
+        $pivotCount = DB::table('task_user')
+            ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
+            ->where('task_user.user_id', $userId)
+            ->where('task_user.status', 'Đã hoàn thành')
+            ->whereBetween('tasks.task_date', [$start, $end])
+            ->whereRaw('LOWER(tasks.title) = ?', [$normalizedTitle])
+            ->count();
+
+        // Task legacy (không có bản ghi pivot)
+        $legacyCount = Task::query()
+            ->whereRaw('LOWER(title) = ?', [$normalizedTitle])
+            ->where('user_id', $userId)
+            ->whereBetween('task_date', [$start, $end])
+            ->where('status', 'Đã hoàn thành')
+            ->whereDoesntHave('users', fn($q) => $q->where('users.id', $userId))
+            ->count();
+
+        return $pivotCount + $legacyCount;
     }
 }
