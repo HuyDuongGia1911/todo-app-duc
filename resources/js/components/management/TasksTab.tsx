@@ -29,6 +29,8 @@ interface AdminTask {
 
   user?: { id?: number; name?: string } | null;
   assigned_by_user?: { id?: number; name?: string } | null;
+  users?: Array<{ id?: number; name?: string }>;
+  user_id?: number | string | null;
 }
 
 interface UserLite {
@@ -200,6 +202,43 @@ export default function TasksTab() {
 
       if (priorityFilter && (t.priority || "") !== priorityFilter.value) return false;
 
+      if (userFilter) {
+        // Ensure the selected user matches either the pivot assignees or the legacy single user field
+        const selectedId = Number(userFilter.value);
+        const targetId = Number.isNaN(selectedId) ? null : selectedId;
+        const targetName = userFilter.label?.toLowerCase() || "";
+
+        const assignedFromPivot = Array.isArray(t.users) ? t.users : [];
+        const assignedIds = assignedFromPivot
+          .map((u) => {
+            if (typeof u?.id === "number") return u.id;
+            const numeric = Number(u?.id);
+            return Number.isNaN(numeric) ? null : numeric;
+          })
+          .filter((id): id is number => id !== null);
+        const assignedNames = assignedFromPivot
+          .map((u) => (u?.name || "").toLowerCase())
+          .filter(Boolean);
+
+        const primaryUserId = (() => {
+          if (typeof t.user?.id === "number") return t.user.id;
+          if (typeof t.user_id === "number") return t.user_id;
+          const numeric = Number(t.user_id);
+          return Number.isNaN(numeric) ? null : numeric;
+        })();
+        const primaryUserName = (t.user?.name || "").toLowerCase();
+
+        const matchById =
+          targetId !== null &&
+          (assignedIds.includes(targetId) || primaryUserId === targetId);
+
+        const matchByName =
+          !!targetName &&
+          (assignedNames.includes(targetName) || (!!primaryUserName && primaryUserName === targetName));
+
+        if (!matchById && !matchByName) return false;
+      }
+
       if (taskDateStart) {
         const start = parseDate(taskDateStart);
         if (start && taskDate && taskDate < start) return false;
@@ -213,7 +252,7 @@ export default function TasksTab() {
 
       return true;
     });
-  }, [tasks, tab, priorityFilter, taskDateStart, taskDateEnd, searchKeyword]);
+  }, [tasks, tab, priorityFilter, taskDateStart, taskDateEnd, searchKeyword, userFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / itemsPerPage));
   const currentTasks = filteredTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -508,8 +547,6 @@ export default function TasksTab() {
                 </tr>
               ) : (
                 currentTasks.map((t) => {
-                  const u = resolveUserByNameOrId(t.user);
-                  const a = resolveUserByNameOrId(t.assigned_by_user);
                   const s = resolveSupervisor(t.supervisor || t.user?.name);
 
                   return (

@@ -12,6 +12,8 @@ export default function AssignTaskTab() {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [form, setForm] = useState({
     user_ids: [],        // ✅ nhiều người
@@ -48,6 +50,7 @@ export default function AssignTaskTab() {
         ]);
         const [tData, uData] = await Promise.all([tRes.json(), uRes.json()]);
         setTasks(Array.isArray(tData) ? tData : []);
+        setCurrentPage(1);
         setUsers(Array.isArray(uData) ? uData : []);
       } catch (e) {
         Swal.fire("Lỗi", "Không tải được dữ liệu", "error");
@@ -56,6 +59,11 @@ export default function AssignTaskTab() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil((tasks.length || 0) / itemsPerPage));
+    setCurrentPage(prev => Math.min(prev, maxPage));
+  }, [tasks.length, itemsPerPage]);
 
   // ================== helpers ==================
   const userOptions = users.map(u => ({ value: u.id, label: u.name }));
@@ -71,6 +79,12 @@ export default function AssignTaskTab() {
     "Thấp": "secondary"
   }[p] || "light");
 
+  const totalPages = Math.max(1, Math.ceil((tasks.length || 0) / itemsPerPage));
+  const currentTasks = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return tasks.slice(start, start + itemsPerPage);
+  }, [tasks, currentPage, itemsPerPage]);
+
   // ================== actions ==========================
   // do an
   const reload = async () => {
@@ -83,6 +97,7 @@ export default function AssignTaskTab() {
     const res = await fetch("/management/assign/tasks?" + qs.toString(), { headers: { Accept: "application/json" } });
     const data = await res.json();
     setTasks(Array.isArray(data) ? data : []);
+    setCurrentPage(1);
   };
 
   const handleCreateUser = async () => {
@@ -148,6 +163,7 @@ export default function AssignTaskTab() {
       }
       const created = await res.json();
       setTasks(prev => [created, ...prev]);
+      setCurrentPage(1);
       // reset form (trừ ngày/ưu tiên nếu muốn)
       setForm(prev => ({
         ...prev,
@@ -404,14 +420,14 @@ export default function AssignTaskTab() {
               </tr>
             </thead>
             <tbody>
-              {tasks.length === 0 ? (
+              {currentTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-muted py-4">
+                  <td colSpan={11} className="text-center text-muted py-4">
                     Không có công việc
                   </td>
                 </tr>
               ) : (
-                tasks.map((t) => {
+                currentTasks.map((t) => {
                   const assignedBy = t.assigned_by_user?.name || "—";
                   const supervisor = t.supervisor || "—";
                   const usersArray = Array.isArray(t.users) ? t.users : [];
@@ -529,6 +545,34 @@ export default function AssignTaskTab() {
             </tbody>
 
           </Table>
+        </div>
+
+        <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+          <span>Trang {currentPage}/{totalPages}</span>
+          <div className="d-flex gap-2">
+            <Button
+              variant="outline-secondary"
+              className="px-3 py-2"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              aria-label="Trang trước"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L6.707 7l4.647 4.646a.5.5 0 0 1-.708.708l-5-5a.5.5 0 0 1 0-.708l5-5a.5.5 0 0 1 .708 0z" />
+              </svg>
+            </Button>
+            <Button
+              variant="outline-secondary"
+              className="px-3 py-2"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              aria-label="Trang sau"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l5 5a.5.5 0 0 1 0 .708l-5 5a.5.5 0 0 1-.708-.708L9.293 7 4.646 2.354a.5.5 0 0 1 0-.708z" />
+              </svg>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

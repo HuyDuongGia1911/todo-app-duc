@@ -10,31 +10,32 @@
 
   <style>
     :root {
-      --primary:#2563eb;
-      --primary-600:#1e4fd8;
-      --bg-1:#0f172a;
-      --bg-2:#111827;
+      --primary:#4f46e5;
+      --primary-600:#4338ca;
+      --primary-200:#c7d2fe;
+      --bg-1:#e0f2ff;
+      --bg-2:#eff6ff;
       --muted:#6b7280;
       --card-bg:#ffffff;
     }
     body {
       min-height:100vh;
-      background:
-        radial-gradient(1200px 600px at 10% -10%, rgba(37,99,235,.12), transparent 60%),
-        radial-gradient(1200px 600px at 110% 110%, rgba(37,99,235,.14), transparent 60%),
-        linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      background:linear-gradient(145deg, #e0f2ff 0%, #eff6ff 45%, #e0e7ff 100%);
+      overflow:hidden;
     }
     .auth-container {
       min-height:100vh;
+      position:relative;
     }
     .auth-card {
-      width:400px;
+      width:420px;
       background:var(--card-bg);
       border-radius:18px;
-      box-shadow:0 10px 30px rgba(2,8,23,.12);
+      box-shadow:0 25px 60px rgba(15,23,42,.18);
+      border:1px solid rgba(79,70,229,.08);
     }
     h4 {
-      font-weight:600;
+      font-weight:700;
       margin-bottom:.5rem;
     }
     .subtitle {
@@ -43,10 +44,20 @@
       margin-bottom:1.5rem;
     }
     .form-label {font-weight:600;color:#374151;}
-    .form-control {height:44px;border-radius:12px;}
+    .form-control {
+      height:44px;
+      border-radius:12px;
+      border:1px solid #e2e8f0;
+      background:#f8fafc;
+    }
+    .form-control:focus {
+      border-color:var(--primary);
+      box-shadow:0 0 0 3px rgba(79,70,229,.12);
+    }
     .btn-primary {
       background:var(--primary)!important;border-color:var(--primary)!important;
       border-radius:12px;
+      box-shadow:0 15px 25px rgba(79,70,229,.25);
     }
     .btn-primary:hover {
       background:var(--primary-600)!important;border-color:var(--primary-600)!important;
@@ -54,13 +65,55 @@
     .text-muted {color:var(--muted)!important;}
     a {color:var(--primary);text-decoration:none;}
     a:hover {text-decoration:underline;}
+    .background-blur {
+      position:absolute;
+      width:420px;
+      height:420px;
+      border-radius:50%;
+      filter:blur(80px);
+      opacity:.6;
+      z-index:0;
+    }
+    .bg-1 {background:rgba(79,70,229,.6);top:-120px;left:-120px;}
+    .bg-2 {background:rgba(14,165,233,.6);bottom:-140px;right:-120px;}
+    .brand-pill {
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      padding:.4rem 1rem;
+      border-radius:999px;
+      background:rgba(79,70,229,.1);
+      color:var(--primary-600);
+      font-size:.8rem;
+      font-weight:600;
+      letter-spacing:.04em;
+    }
+    .social-actions a {
+      width:44px;height:44px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      border:1px solid #e5e7eb;
+      background:#fff;
+      transition:.25s;
+    }
+    .social-actions a:hover {
+      transform:translateY(-2px);
+      border-color:var(--primary-200);
+      color:var(--primary);
+    }
   </style>
 </head>
 
 <body>
   <div class="container auth-container d-flex align-items-center justify-content-center">
+    <div class="background-blur bg-1"></div>
+    <div class="background-blur bg-2"></div>
     <div class="card auth-card p-4 p-md-5">
-      <h4 class="text-center">Login</h4>
+      <div class="d-flex justify-content-center mb-3">
+        <span class="brand-pill">
+          <i class="fa-solid fa-briefcase"></i> Taskflow Portal
+        </span>
+      </div>
+      <h4 class="text-center">Chào mừng trở lại!</h4>
       <p class="text-center subtitle">Đăng nhập để quản lý công việc</p>
 
       @if(session('error'))
@@ -104,15 +157,19 @@
 
         <div class="text-center">
           <p class="text-muted mb-2">hoặc đăng nhập với</p>
-          <div class="d-flex justify-content-center gap-2">
-            <a href="{{ route('facebook.redirect') }}" class="btn btn-light btn-floating" title="Đăng nhập bằng Facebook">
+          <div class="d-flex justify-content-center gap-3 social-actions">
+            <a href="{{ route('facebook.redirect') }}" title="Đăng nhập bằng Facebook">
               <i class="fab fa-facebook-f"></i>
             </a>
-            <a href="{{ route('google.redirect') }}" class="btn btn-light btn-floating" title="Đăng nhập bằng Google">
+            <a href="{{ route('google.redirect') }}" title="Đăng nhập bằng Google">
               <i class="fab fa-google"></i>
             </a>
-            <button type="button" class="btn btn-light btn-floating"><i class="fab fa-twitter"></i></button>
-            <button type="button" class="btn btn-light btn-floating"><i class="fab fa-github"></i></button>
+            <a href="javascript:void(0)" title="Twitter (sắp ra mắt)">
+              <i class="fab fa-twitter"></i>
+            </a>
+            <a href="javascript:void(0)" title="Github (sắp ra mắt)">
+              <i class="fab fa-github"></i>
+            </a>
           </div>
         </div>
       </form>
