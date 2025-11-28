@@ -105,8 +105,12 @@
         <div class="text-center">
           <p class="text-muted mb-2">hoặc đăng nhập với</p>
           <div class="d-flex justify-content-center gap-2">
-            <button type="button" class="btn btn-light btn-floating"><i class="fab fa-facebook-f"></i></button>
-            <button type="button" class="btn btn-light btn-floating"><i class="fab fa-google"></i></button>
+            <a href="{{ route('facebook.redirect') }}" class="btn btn-light btn-floating" title="Đăng nhập bằng Facebook">
+              <i class="fab fa-facebook-f"></i>
+            </a>
+            <a href="{{ route('google.redirect') }}" class="btn btn-light btn-floating" title="Đăng nhập bằng Google">
+              <i class="fab fa-google"></i>
+            </a>
             <button type="button" class="btn btn-light btn-floating"><i class="fab fa-twitter"></i></button>
             <button type="button" class="btn btn-light btn-floating"><i class="fab fa-github"></i></button>
           </div>
