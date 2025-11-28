@@ -92,8 +92,9 @@ class TaskController extends Controller
         }
 
         $tasks = $query
-            ->orderByRaw("FIELD(priority, 'Khẩn cấp', 'Cao', 'Trung bình', 'Thấp')")
             ->orderBy('task_date', 'desc')
+            ->orderBy('deadline_at', 'desc')
+            ->orderByRaw("FIELD(priority, 'Khẩn cấp', 'Cao', 'Trung bình', 'Thấp')")
             ->get()
             ->map(function ($t) {
                 // Mục tiêu tổng = số người được giao

@@ -65,7 +65,7 @@ export default function TasksTab() {
       try {
         const res = await fetch("/management/tasks", { headers: { Accept: "application/json" } });
         const data = await res.json();
-        setTasks(Array.isArray(data) ? data : []);
+        setTasks(Array.isArray(data) ? sortTasksByDateDesc(data) : []);
       } catch {
         Swal.fire("Lỗi", "Không tải được danh sách công việc", "error");
       } finally {
@@ -99,6 +99,14 @@ export default function TasksTab() {
     const d = parseDate(dateString || undefined);
     if (!d) return "-";
     return d.toLocaleDateString("vi-VN");
+  };
+
+  const sortTasksByDateDesc = (list: AdminTask[]) => {
+    return [...list].sort((a, b) => {
+      const aDate = parseDate(a.task_date) || parseDate(a.deadline_at || undefined) || new Date(0);
+      const bDate = parseDate(b.task_date) || parseDate(b.deadline_at || undefined) || new Date(0);
+      return bDate.getTime() - aDate.getTime();
+    });
   };
 
   const getPriorityColor = (priority?: string | null) => {
@@ -288,7 +296,7 @@ export default function TasksTab() {
 
   const handleToggleStatus = async (task: AdminTask) => {
     const newStatus = task.status === "Đã hoàn thành" ? "Chưa hoàn thành" : "Đã hoàn thành";
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)));
+    setTasks((prev) => sortTasksByDateDesc(prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))));
     try {
       const res = await fetch(`/management/tasks/${task.id}`, {
         method: "POST",
@@ -301,7 +309,7 @@ export default function TasksTab() {
       });
       if (!res.ok) throw new Error("Update status failed");
     } catch {
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t)));
+      setTasks((prev) => sortTasksByDateDesc(prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t))));
       Swal.fire("Lỗi", "Không thể cập nhật trạng thái", "error");
     }
   };
@@ -707,7 +715,7 @@ export default function TasksTab() {
         <TaskAddFormAdmin
           onCancel={() => setShowAddModal(false)}
           onSuccess={(newTask: AdminTask) => {
-            setTasks((prev) => [newTask, ...prev]);
+            setTasks((prev) => sortTasksByDateDesc([newTask, ...prev]));
             setShowAddModal(false);
             Swal.fire("Thành công", "Đã tạo công việc", "success");
           }}
@@ -730,7 +738,7 @@ export default function TasksTab() {
             setEditingTaskId(null);
           }}
           onSuccess={(updatedTask: AdminTask) => {
-            setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+            setTasks((prev) => sortTasksByDateDesc(prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))));
             setShowEditModal(false);
             setEditingTaskId(null);
             Swal.fire("Thành công", "Đã cập nhật công việc", "success");
