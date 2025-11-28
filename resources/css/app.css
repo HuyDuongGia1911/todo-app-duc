@@ -237,3 +237,131 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   opacity: 1 !important;
   font-style: normal !important;
 }
+
+/* Notification bell */
+.notification-dropdown {
+  position: relative;
+}
+
+.notification-bell {
+  position: relative;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #495057;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background-color: #dc3545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.notification-menu {
+  width: 320px;
+  border: none;
+  padding: 0;
+  border-radius: 12px;
+}
+
+.notification-header,
+.notification-footer {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.notification-footer {
+  border-top: 1px solid #f1f3f5;
+  border-bottom: none;
+}
+
+.notification-body {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.notification-item:hover,
+.notification-item:focus-visible {
+  background-color: #f8f9fa;
+  transform: translateX(2px);
+  outline: none;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item-unread {
+  background-color: #eef5ff;
+  border-left: 3px solid #0d6efd;
+  box-shadow: 0 6px 20px rgba(13, 110, 253, 0.12);
+}
+
+.notification-item-unread:hover,
+.notification-item-unread:focus-visible {
+  background-color: #e2edff;
+  transform: translateX(4px) scale(1.005);
+}
+
+.notification-empty {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.priority-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.priority-danger { background-color: rgba(220, 53, 69, 0.1); color: #dc3545; }
+.priority-warning { background-color: rgba(255, 193, 7, 0.2); color: #a06000; }
+.priority-info { background-color: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+.priority-muted { background-color: #f1f3f5; color: #6c757d; }
+
+@keyframes task-row-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+  40% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+.task-row-highlight {
+  animation: task-row-pulse 0.9s ease-in-out;
+  background-color: #eef5ff !important;
+}

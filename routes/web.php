@@ -181,4 +181,6 @@ Route::prefix('api')->middleware('auth')->group(function () {
     });
     // web.php
     Route::post('/tasks/{task}/user-status', [TaskController::class, 'updateUserStatus']);
+    Route::get('/tasks/latest-assignments', [TaskController::class, 'latestAssignments']);
+    Route::post('/tasks/{task}/mark-read', [TaskController::class, 'markAssignmentAsRead']);
 });

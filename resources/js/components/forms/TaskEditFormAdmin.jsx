@@ -177,7 +177,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* NGƯỜI NHẬN */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Người nhận</Form.Label>
             <AsyncDropdownSelect
               name="receivers"
@@ -196,7 +196,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* NGƯỜI GIAO */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Người giao</Form.Label>
             <AsyncDropdownSelect
               name="assigners"
@@ -215,13 +215,13 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* NGƯỜI PHỤ TRÁCH */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Người phụ trách</Form.Label>
             <AsyncDropdownSelect
               name="supervisors"
               api="/api/users"
               field="name"
-              valueKey="id"
+              valueKey="name"
               labelKey="name"
               multiple
               value={form.supervisors}
@@ -234,7 +234,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* PRIORITY */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Độ ưu tiên</Form.Label>
             <Form.Select
               name="priority"
@@ -253,7 +253,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* PROGRESS */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Tiến độ (%)</Form.Label>
             <Form.Control
               type="number"
@@ -270,7 +270,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* FILE LINK */}
         <Col md={12}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">File liên quan</Form.Label>
             <Form.Control
               type="text"
@@ -285,7 +285,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* DETAIL */}
         <Col md={12}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Chi tiết</Form.Label>
             <Form.Control
               as="textarea"

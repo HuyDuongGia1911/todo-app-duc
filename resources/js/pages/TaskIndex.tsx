@@ -13,6 +13,7 @@ import Modal from '../components/Modal'
 import ExportModal from '../components/ExportModal';
 import { Dropdown } from 'react-bootstrap';
 import { FaDownload, FaTrash } from 'react-icons/fa';
+import NotificationBell from '../components/NotificationBell';
 
 type OptionType = { value: string; label: string };
 
@@ -59,6 +60,11 @@ export default function TaskIndex({ tasks }: Props) {
   const [users, setUsers] = useState<User[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [highlightTaskId, setHighlightTaskId] = useState<number | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('highlight_task');
+    return id ? Number(id) : null;
+  });
   const currentUserName = (document.querySelector('meta[name="current-user"]')?.getAttribute('content')) || 'admin';
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const itemsPerPage = 7;
@@ -166,6 +172,56 @@ export default function TaskIndex({ tasks }: Props) {
   const filteredTasks = applyFilters();
   const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
   const currentTasks = filteredTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  useEffect(() => {
+    if (!highlightTaskId) return;
+    const targetIndex = filteredTasks.findIndex(task => task.id === highlightTaskId);
+    if (targetIndex === -1) return;
+    const targetPage = Math.floor(targetIndex / itemsPerPage) + 1;
+    if (targetPage !== currentPage) {
+      setCurrentPage(targetPage);
+    }
+  }, [highlightTaskId, filteredTasks, currentPage]);
+
+  useEffect(() => {
+    if (!highlightTaskId) return;
+
+    let highlightTimer: number | undefined;
+    let cleanupClass: number | undefined;
+    let cleanupState: number | undefined;
+
+    const clearHighlightParam = () => {
+      setHighlightTaskId(null);
+      const params = new URLSearchParams(window.location.search);
+      params.delete('highlight_task');
+      const newQuery = params.toString();
+      const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
+      window.history.replaceState({}, '', newUrl);
+    };
+
+    highlightTimer = window.setTimeout(() => {
+      const row = document.getElementById(`task-row-${highlightTaskId}`);
+      if (!row) {
+        clearHighlightParam();
+        return;
+      }
+
+      row.classList.add('task-row-highlight');
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      cleanupClass = window.setTimeout(() => {
+        row.classList.remove('task-row-highlight');
+      }, 1200);
+
+      cleanupState = window.setTimeout(clearHighlightParam, 1400);
+    }, 200);
+
+    return () => {
+      if (highlightTimer) window.clearTimeout(highlightTimer);
+      if (cleanupClass) window.clearTimeout(cleanupClass);
+      if (cleanupState) window.clearTimeout(cleanupState);
+    };
+  }, [highlightTaskId, currentTasks]);
 
   const handleToggle = async (task: Task) => {
     const newStatus = task.status === 'Đã hoàn thành' ? 'Chưa hoàn thành' : 'Đã hoàn thành';
@@ -304,7 +360,8 @@ export default function TaskIndex({ tasks }: Props) {
           </div>
         </div>
 
-        <div className="d-flex gap-2">
+        <div className="d-flex align-items-center gap-3">
+          <NotificationBell />
           <Button
             variant="outline-secondary"
             className="rounded-3 py-2 px-3"
@@ -572,7 +629,11 @@ export default function TaskIndex({ tasks }: Props) {
                 const avatar = user?.avatar ? `/storage/${user.avatar}` : 'https://www.w3schools.com/howto/img_avatar.png';
 
                 return (
-                  <tr key={task.id} className={task.status === 'Đã hoàn thành' ? 'task-done-row' : ''}>
+                  <tr
+                    key={task.id}
+                    id={`task-row-${task.id}`}
+                    className={task.status === 'Đã hoàn thành' ? 'task-done-row' : ''}
+                  >
                     <td className="text-center truncate-cell" title={formatDate(task.task_date)}>{formatDate(task.task_date)}</td>
                     <td className="text-center truncate-cell" title={formatDate(task.deadline_at)}>
                       {formatDate(task.deadline_at)}<br />

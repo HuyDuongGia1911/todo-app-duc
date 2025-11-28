@@ -673,28 +673,30 @@ export default function TasksTab() {
         </div>
 
         {/* Pagination */}
-        <div className="d-flex justify-content-between align-items-center mt-3">
+        <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
           <span>Trang {currentPage}/{totalPages}</span>
-          <div>
+          <div className="d-flex gap-2">
             <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0 me-2"
+              variant="outline-secondary"
+              className="px-3 py-2"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               aria-label="Trang trước"
             >
-              ‹
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L6.707 7l4.647 4.646a.5.5 0 0 1-.708.708l-5-5a.5.5 0 0 1 0-.708l5-5a.5.5 0 0 1 .708 0z" />
+              </svg>
             </Button>
             <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0"
+              variant="outline-secondary"
+              className="px-3 py-2"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               aria-label="Trang sau"
             >
-              ›
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l5 5a.5.5 0 0 1 0 .708l-5 5a.5.5 0 0 1-.708-.708L9.293 7 4.646 2.354a.5.5 0 0 1 0-.708z" />
+              </svg>
             </Button>
           </div>
         </div>
@@ -704,7 +706,7 @@ export default function TasksTab() {
       <Modal isOpen={showAddModal} title="Thêm công việc" onClose={() => setShowAddModal(false)}>
         <TaskAddFormAdmin
           onCancel={() => setShowAddModal(false)}
-          onSuccess={(newTask) => {
+          onSuccess={(newTask: AdminTask) => {
             setTasks((prev) => [newTask, ...prev]);
             setShowAddModal(false);
             Swal.fire("Thành công", "Đã tạo công việc", "success");
@@ -727,7 +729,7 @@ export default function TasksTab() {
             setShowEditModal(false);
             setEditingTaskId(null);
           }}
-          onSuccess={(updatedTask) => {
+          onSuccess={(updatedTask: AdminTask) => {
             setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
             setShowEditModal(false);
             setEditingTaskId(null);

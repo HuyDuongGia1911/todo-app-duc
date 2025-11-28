@@ -14,7 +14,7 @@ use App\Exports\TasksExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 use App\Models\Kpi;
-use DB;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -155,7 +155,7 @@ class TaskController extends Controller
 
         // Nếu chưa có user_ids => tức là người tự giao chính mình
         if (empty($assignedUserIds)) {
-            \DB::table('task_user')->insert([
+            DB::table('task_user')->insert([
                 'task_id'   => $task->id,
                 'user_id'   => $creatorId, // chính người tạo
                 'progress'  => $data['progress'] ?? 0,
@@ -166,7 +166,7 @@ class TaskController extends Controller
         } else {
             // Nếu có danh sách người được giao → gán như bình thường
             foreach ($assignedUserIds as $uid) {
-                \DB::table('task_user')->insert([
+                DB::table('task_user')->insert([
                     'task_id'   => $task->id,
                     'user_id'   => $uid,
                     'progress'  => $data['progress'] ?? 0,
@@ -368,5 +368,86 @@ class TaskController extends Controller
             'done_count'    => $doneCount,      // số người đã xong
             'total_count'   => $totalCount,     // tổng người nhận
         ]);
+    }
+
+    public function latestAssignments()
+    {
+        $userId = auth()->id();
+
+        if (!$userId) {
+            return response()->json([], 401);
+        }
+
+        $tasks = Task::query()
+            ->select([
+                'tasks.id',
+                'tasks.title',
+                'tasks.deadline_at',
+                'tasks.priority',
+                'tasks.status',
+                'tasks.supervisor',
+                'tasks.assigned_by',
+                'task_user.status as my_status',
+                'task_user.progress as my_progress',
+                'task_user.created_at as assigned_at',
+                'task_user.read_at as read_at',
+            ])
+            ->join('task_user', function ($join) use ($userId) {
+                $join->on('task_user.task_id', '=', 'tasks.id')
+                    ->where('task_user.user_id', '=', $userId);
+            })
+            ->with('assignedByUser:id,name,avatar')
+            ->orderByDesc('assigned_at')
+            ->limit(5)
+            ->get()
+            ->map(function ($task) {
+                $assignedBy = $task->assignedByUser
+                    ? [
+                        'id'     => $task->assignedByUser->id,
+                        'name'   => $task->assignedByUser->name,
+                        'avatar' => $task->assignedByUser->avatar,
+                    ]
+                    : [
+                        'id'     => null,
+                        'name'   => $task->supervisor,
+                        'avatar' => null,
+                    ];
+
+                return [
+                    'id'          => $task->id,
+                    'title'       => $task->title,
+                    'deadline_at' => $task->deadline_at,
+                    'priority'    => $task->priority,
+                    'status'      => $task->status,
+                    'assigned_at' => $task->assigned_at,
+                    'my_status'   => $task->my_status,
+                    'my_progress' => $task->my_progress,
+                    'read_at'     => $task->read_at,
+                    'assigned_by' => $assignedBy,
+                ];
+            });
+
+        return response()->json($tasks);
+    }
+
+    public function markAssignmentAsRead(Task $task)
+    {
+        $userId = auth()->id();
+
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $pivot = $task->users()->where('user_id', $userId)->first();
+
+        if (!$pivot) {
+            return response()->json(['message' => 'Bạn không được giao task này'], 403);
+        }
+
+        $task->users()->updateExistingPivot($userId, [
+            'read_at' => now(),
+        ]);
+
+        return response()->json(['success' => true]);
     }
 }
