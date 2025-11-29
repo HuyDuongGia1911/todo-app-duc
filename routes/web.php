@@ -60,6 +60,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/tasks/check-exist', [TaskController::class, 'checkExist'])->name('tasks.check-exist');
     //tong ket
     Route::get('/summaries', [MonthlySummaryController::class, 'index']);
+    Route::get('/summaries/preview', [MonthlySummaryController::class, 'preview']);
     Route::get('/summaries/{summary}', [MonthlySummaryController::class, 'show']);
     Route::post('/summaries', [MonthlySummaryController::class, 'store']);
     Route::put('/summaries/{summary}', [MonthlySummaryController::class, 'update']);

@@ -7,6 +7,8 @@
     <li><strong>Ngày đến hạn:</strong> {{$kpi->end_date }}</li>
     <li><strong>Ghi chú:</strong> {{$kpi->note ?? '-' }}</li>
 </ul>
+<p><strong>Mục tiêu tháng:</strong> {{ $kpi->target_progress ?? 0 }}</p>
+<p><strong>Đã đạt:</strong> {{ $kpi->actual_progress ?? 0 }}</p>
 <p><strong>Tiến độ tổng thể:</strong> {{ $overallProgress }}%</p>
 <h4>Công việc liên quan:</h4>
 <table class="table">
@@ -21,14 +23,11 @@
 
   <tbody>
     @foreach($tasks as $task)
-        @php
-            $percent = $task['target'] > 0 ? round($task['actual'] / $task['target'] * 100) : 0;
-        @endphp
         <tr>
             <td>{{ $task['title'] }}</td>
             <td>{{ $task['actual'] }}</td>
             <td>{{ $task['target'] }}</td>
-            <td>{{ $percent }}%</td>
+            <td>{{ $task['ratio'] ?? 0 }}%</td>
         </tr>
     @endforeach
 </tbody>

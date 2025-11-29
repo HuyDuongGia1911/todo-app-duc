@@ -15,6 +15,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 use App\Models\Kpi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
@@ -76,7 +77,7 @@ class TaskController extends Controller
         $userId = Auth::id();
 
         $query = $this->queryForUser($userId)
-            ->with(['assignedByUser', 'users'])
+            ->with(['assignedByUser', 'users', 'files'])
             ->withCount([
                 'users as total_count',
                 'users as done_count' => function ($q) {
@@ -97,8 +98,8 @@ class TaskController extends Controller
             ->orderByRaw("FIELD(priority, 'Khẩn cấp', 'Cao', 'Trung bình', 'Thấp')")
             ->get()
             ->map(function ($t) {
-                // Mục tiêu tổng = số người được giao
-                $t->task_goal = $t->total_count ?: 1;
+                // Mục tiêu ưu tiên lấy từ cột progress (admin nhập khi giao việc)
+                $t->task_goal = $t->progress ?? ($t->total_count ?: 1);
                 return $t;
             });
 
@@ -132,6 +133,10 @@ class TaskController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate([
+            'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt',
+        ]);
+
         $this->autoCreateMeta($request);
 
         $data = $request->all();
@@ -178,10 +183,11 @@ class TaskController extends Controller
             }
         }
 
+        $this->syncAttachments($request, $task);
+
         if ($request->wantsJson()) {
-            // có thể load relations để FE dùng luôn
             return response()->json(
-                $task->load(['assignedByUser', 'users'])
+                $task->load(['assignedByUser', 'users', 'files'])
             );
         }
 
@@ -203,6 +209,11 @@ class TaskController extends Controller
 
     public function update(Request $request, Task $task)
     {
+        $request->validate([
+            'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt',
+            'remove_attachment_ids.*' => 'integer',
+        ]);
+
         $this->autoCreateMeta($request);
 
         $data = $request->all();
@@ -214,8 +225,10 @@ class TaskController extends Controller
 
         $task->update($data);
 
+        $this->syncAttachments($request, $task);
+
         if ($request->wantsJson()) {
-            return response()->json($task->load(['assignedByUser', 'users']));
+            return response()->json($task->load(['assignedByUser', 'users', 'files']));
         }
 
         $redirect = $request->redirect_back ?? route('tasks.index');
@@ -224,6 +237,12 @@ class TaskController extends Controller
 
     public function destroy(Task $task)
     {
+        foreach ($task->files as $file) {
+            if ($file->path) {
+                Storage::disk('public')->delete($file->path);
+            }
+        }
+
         $task->delete();
         return redirect()->route('tasks.index')->with('success', 'Đã xoá!');
     }
@@ -369,6 +388,38 @@ class TaskController extends Controller
             'done_count'    => $doneCount,      // số người đã xong
             'total_count'   => $totalCount,     // tổng người nhận
         ]);
+    }
+
+    private function syncAttachments(Request $request, Task $task): void
+    {
+        foreach ((array) $request->file('attachments') as $uploadedFile) {
+            if (!$uploadedFile) {
+                continue;
+            }
+
+            $path = $uploadedFile->store('task-files', 'public');
+
+            $task->files()->create([
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'path'          => $path,
+                'mime_type'     => $uploadedFile->getClientMimeType(),
+                'size'          => $uploadedFile->getSize(),
+            ]);
+        }
+
+        $removalIds = array_filter((array) $request->input('remove_attachment_ids', []));
+        if (empty($removalIds)) {
+            return;
+        }
+
+        $files = $task->files()->whereIn('id', $removalIds)->get();
+
+        foreach ($files as $file) {
+            if ($file->path) {
+                Storage::disk('public')->delete($file->path);
+            }
+            $file->delete();
+        }
     }
 
     public function latestAssignments()

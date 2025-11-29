@@ -11,9 +11,16 @@ use Carbon\Carbon;
 use App\Models\Task;
 use App\Exports\SingleMonthlySummaryExport;
 use App\Models\KPI;
+use App\Services\MonthlyReportBuilder;
 
 class MonthlySummaryController extends Controller
 {
+    protected MonthlyReportBuilder $reportBuilder;
+
+    public function __construct(MonthlyReportBuilder $reportBuilder)
+    {
+        $this->reportBuilder = $reportBuilder;
+    }
     public function index(Request $request)
     {
         if ($request->wantsJson()) {
@@ -30,13 +37,16 @@ class MonthlySummaryController extends Controller
     {
         $data = $this->validateData($request);
 
+        $payload = $this->reportBuilder->generate(Auth::id(), $data['month']);
+
         $summary = MonthlySummary::create([
             'user_id' => Auth::id(),
             'month' => $data['month'],
-            'title' => $data['title'] ?? '',
-            'content' => $data['content'] ?? '',
-            'stats' => [],
-            'tasks_cache' => [],
+            'title' => $data['title'] ?? ($payload['title'] ?? ''),
+            'content' => $data['content'] ?? ($payload['content'] ?? ''),
+            'stats' => $payload['stats'] ?? [],
+            'tasks_cache' => $payload['tasks_cache'] ?? [],
+            'total_tasks' => $payload['stats']['total'] ?? 0,
         ]);
 
         return response()->json($summary, 201);
@@ -135,6 +145,13 @@ class MonthlySummaryController extends Controller
     }
 
 
+    public function preview(Request $request)
+    {
+        $request->validate(['month' => 'required|date_format:Y-m']);
+        $payload = $this->reportBuilder->generate(Auth::id(), $request->input('month'));
+        return response()->json($payload);
+    }
+
     private function validateData(Request $request): array
     {
         return $request->validate([
@@ -180,76 +197,22 @@ class MonthlySummaryController extends Controller
             'avg_progress' => $avgProgress,
         ];
     }
-   public function regenerate(MonthlySummary $summary)
-{
-    $this->authorizeOwner($summary);
+    public function regenerate(MonthlySummary $summary)
+    {
+        $this->authorizeOwner($summary);
 
-    $month = Carbon::parse($summary->month);
-    $start = $month->copy()->startOfMonth()->toDateString();
-    $end = $month->copy()->endOfMonth()->toDateString();
+        $payload = $this->reportBuilder->generate($summary->user_id, $summary->month);
 
-    $tasks = Task::where('user_id', $summary->user_id)
-        ->whereBetween('task_date', [$start, $end])
-        ->get();
+        $summary->fill([
+            'title' => $payload['title'] ?? $summary->title,
+            'content' => $payload['content'] ?? $summary->content,
+            'stats' => $payload['stats'] ?? $summary->stats,
+            'tasks_cache' => $payload['tasks_cache'] ?? $summary->tasks_cache,
+            'total_tasks' => $payload['stats']['total'] ?? $summary->total_tasks,
+        ])->save();
 
-    $merged = [];
-    foreach ($tasks as $task) {
-        $title = $task->title ?? '(Không tên)';
-        if (!isset($merged[$title])) {
-            $merged[$title] = [
-                'title' => $title,
-                'progress' => 0,
-                'dates' => [],
-                'status' => $task->status ?? null,
-                'links' => [], 
-            ];
-        }
-
-        if ($task->status === 'Đã hoàn thành') {
-            $merged[$title]['progress'] += $task->progress ?? 0;
-        }
-
-        $merged[$title]['dates'][] = $task->task_date;
-
-        // thêm link nếu có
-       if (!empty($task->file_link) && !in_array($task->file_link, $merged[$title]['links'])) {
-    $merged[$title]['links'][] = $task->file_link;
-}
+        return response()->json($summary->fresh());
     }
-
-    // Lấy 1 link đầu tiên, xoá mảng links
-   $tasksCache = collect($merged)->map(function ($item) {
-    // đảm bảo unique + sạch
-    $links = collect($item['links'] ?? [])
-        ->filter(fn($l) => is_string($l) && strlen(trim($l)))
-        ->map(fn($l) => trim($l))
-        ->unique()
-        ->values()
-        ->all();
-
-    // GIỮ CẢ HAI: 'links' (đầy đủ) và 'link' (link đầu tiên cho backward-compat)
-    $item['links'] = $links;
-    $item['link']  = $links[0] ?? null;
-
-    return $item;
-})->values()->all();
-
-    $today = Carbon::today();
-    $doneCount = $tasks->where('status', 'Đã hoàn thành')->count();
-    $overdueCount = $tasks->filter(fn($t) => $t->status !== 'Đã hoàn thành' && Carbon::parse($t->task_date)->lt($today))->count();
-    $pendingCount = $tasks->filter(fn($t) => $t->status !== 'Đã hoàn thành' && Carbon::parse($t->task_date)->gte($today))->count();
-
-    $summary->tasks_cache = $tasksCache;
-$summary->stats = [
-    'total'   => $tasks->count(),
-    'done'    => $doneCount,
-    'pending' => $pendingCount,
-    'overdue' => $overdueCount,
-];
-
-$summary->save();
-return response()->json($summary);
-}
     private function authorizeOwner(MonthlySummary $summary): void
     {
         abort_if($summary->user_id !== Auth::id(), 403);

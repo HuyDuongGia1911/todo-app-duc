@@ -3,12 +3,20 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\KPI;
-use App\Models\Task;
+use App\Services\MonthlyKpiAggregator;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class KpiAdminController extends Controller
 {
+    /** @var MonthlyKpiAggregator */
+    protected $aggregator;
+
+    public function __construct(MonthlyKpiAggregator $aggregator)
+    {
+        $this->aggregator = $aggregator;
+    }
+
     // LIST: trả JSON danh sách KPI + progress/target đã tính
     public function index(Request $request)
     {
@@ -25,27 +33,11 @@ class KpiAdminController extends Controller
 
         $kpis = $q->get();
 
-        // Tính progress động & tổng target
         foreach ($kpis as $kpi) {
-            $start = min($kpi->start_date, $kpi->end_date);
-            $end   = max($kpi->start_date, $kpi->end_date);
-
-            $totalActual = 0;
-            $totalTarget = 0;
-
-            foreach ($kpi->tasks as $kt) {
-                $actual = Task::whereRaw('LOWER(title) = ?', [strtolower($kt->task_title)])
-                    ->whereBetween('task_date', [$start, $end])
-                    ->where('user_id', $kpi->user_id)
-                    ->where('status', 'Đã hoàn thành')
-                    ->sum('progress');
-
-                $totalActual += $actual;
-                $totalTarget += $kt->target_progress ?? 0;
-            }
-
-            $kpi->target   = $totalTarget; // thêm trường trả về để FE hiện "Mục tiêu"
-            $kpi->progress = $totalTarget > 0 ? round($totalActual / $totalTarget * 100) : 0; // %
+            $this->aggregator->recalculate($kpi);
+            $kpi->target = $kpi->target_progress;
+            $kpi->actual = $kpi->actual_progress;
+            $kpi->progress = $kpi->percent;
         }
 
         return response()->json($kpis);
@@ -74,10 +66,10 @@ class KpiAdminController extends Controller
             'note'       => $data['note'] ?? null,
         ]);
 
-        // Tính trường trả về (ban đầu 0 nếu chưa có KPITask)
-        $kpi->load('tasks');
-        $kpi->target = $kpi->tasks->sum('target_progress');
-        $kpi->progress = 0;
+        $this->aggregator->recalculate($kpi);
+        $kpi->target = $kpi->target_progress;
+        $kpi->actual = $kpi->actual_progress;
+        $kpi->progress = $kpi->percent;
 
         return response()->json($kpi, 201);
     }
@@ -102,28 +94,10 @@ class KpiAdminController extends Controller
             'note'       => $data['note'] ?? $kpi->note,
         ]);
 
-        // Trả về kèm progress/target đã tính
-        $kpi->load('tasks');
-
-        $start = min($kpi->start_date, $kpi->end_date);
-        $end   = max($kpi->start_date, $kpi->end_date);
-
-        $totalActual = 0;
-        $totalTarget = 0;
-
-        foreach ($kpi->tasks as $kt) {
-            $actual = Task::whereRaw('LOWER(title) = ?', [strtolower($kt->task_title)])
-                ->whereBetween('task_date', [$start, $end])
-                ->where('user_id', $kpi->user_id)
-                ->where('status', 'Đã hoàn thành')
-                ->sum('progress');
-
-            $totalActual += $actual;
-            $totalTarget += $kt->target_progress ?? 0;
-        }
-
-        $kpi->target   = $totalTarget;
-        $kpi->progress = $totalTarget > 0 ? round($totalActual / $totalTarget * 100) : 0;
+        $this->aggregator->recalculate($kpi);
+        $kpi->target = $kpi->target_progress;
+        $kpi->actual = $kpi->actual_progress;
+        $kpi->progress = $kpi->percent;
 
         return response()->json($kpi);
     }

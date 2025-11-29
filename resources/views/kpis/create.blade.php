@@ -49,6 +49,9 @@
         <div class="col">
             <input type="number" name="target_progresses[]" class="form-control" placeholder="Tiến độ mục tiêu" required>
         </div>
+        <div class="col">
+            <input type="number" name="completed_units[]" class="form-control" placeholder="Đơn vị/1 task" value="1" min="1" required>
+        </div>
         <div class="col-auto">
             <button type="button" class="btn btn-danger" onclick="removeTask(this)">X</button>
         </div>

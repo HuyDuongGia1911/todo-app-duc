@@ -3,15 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\KPI;
-use App\Models\KPITask;
-use App\Models\Task;
 use App\Models\TaskTitle;
+use App\Services\MonthlyKpiAggregator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class KPIController extends Controller
 {
+    /** @var MonthlyKpiAggregator */
+    protected $aggregator;
+
+    public function __construct(MonthlyKpiAggregator $aggregator)
+    {
+        $this->aggregator = $aggregator;
+    }
+
     /**
      * ======================
      *  LIST KPI
@@ -31,11 +37,12 @@ class KPIController extends Controller
         }
 
         $kpis = $query->orderByDesc('end_date')->get();
-        $userId = auth()->id();
 
         foreach ($kpis as $kpi) {
-            $progress = $this->calculateKPIProgress($kpi, $userId);
-            $kpi->calculated_progress = $progress;
+            $this->aggregator->recalculate($kpi);
+            $kpi->calculated_progress = $kpi->percent;
+            $kpi->calculated_target = $kpi->target_progress;
+            $kpi->calculated_actual = $kpi->actual_progress;
         }
 
         if ($request->boolean('json')) {
@@ -111,9 +118,12 @@ class KPIController extends Controller
 
             $kpi->tasks()->create([
                 'task_title' => $title,
-                'target_progress' => $request->target_progresses[$i] ?? 0
+                'target_progress' => $request->target_progresses[$i] ?? 0,
+                'completed_unit' => $request->completed_units[$i] ?? 1,
             ]);
         }
+
+        $this->aggregator->recalculate($kpi);
 
         return redirect()->route('kpis.index')->with('success', 'Đã tạo KPI!');
     }
@@ -125,34 +135,11 @@ class KPIController extends Controller
      */
     public function show(KPI $kpi)
     {
-        $userId = auth()->id();
-        $start = Carbon::parse($kpi->start_date)->toDateString();
-        $end   = Carbon::parse($kpi->end_date)->toDateString();
+        $this->aggregator->recalculate($kpi);
+        $tasks = $this->aggregator->breakdown($kpi);
+        $overallProgress = $kpi->percent;
 
-        $tasks = [];
-        $totalActual = 0;
-        $totalTarget = 0;
-
-        foreach ($kpi->tasks as $t) {
-
-            $actual = $this->countCompletedTasks($t->task_title, $userId, $start, $end);
-
-            $target = $t->target_progress ?: 0;
-
-            $tasks[] = [
-                'title'  => $t->task_title,
-                'actual' => $actual,
-                'target' => $target,
-                'ratio'  => $target > 0 ? min($actual / $target, 1) : 0
-            ];
-
-            $totalActual += $actual;
-            $totalTarget += $target;
-        }
-
-        $overall = $totalTarget > 0 ? round(min($totalActual / $totalTarget, 1) * 100) : 0;
-
-        return view('kpis.show', compact('kpi', 'tasks', 'overall'));
+        return view('kpis.show', compact('kpi', 'tasks', 'overallProgress'));
     }
 
     /**
@@ -218,9 +205,12 @@ class KPIController extends Controller
 
             $kpi->tasks()->create([
                 'task_title' => $title,
-                'target_progress' => $request->target_progresses[$i] ?? 0
+                'target_progress' => $request->target_progresses[$i] ?? 0,
+                'completed_unit' => $request->completed_units[$i] ?? 1,
             ]);
         }
+
+        $this->aggregator->recalculate($kpi);
 
         return redirect()->route('kpis.index')->with('success', 'Đã cập nhật KPI!');
     }
@@ -255,91 +245,13 @@ class KPIController extends Controller
      */
     public function showJson(KPI $kpi)
     {
-        $userId = auth()->id();
-        $start = Carbon::parse($kpi->start_date)->toDateString();
-        $end   = Carbon::parse($kpi->end_date)->toDateString();
-
-        $tasks = [];
-        $totalActual = 0;
-        $totalTarget = 0;
-
-        foreach ($kpi->tasks as $t) {
-
-            $actual = $this->countCompletedTasks($t->task_title, $userId, $start, $end);
-
-            $target = $t->target_progress ?: 0;
-
-            $tasks[] = [
-                'title'  => $t->task_title,
-                'actual' => $actual,
-                'target' => $target,
-                'ratio'  => $target > 0 ? min($actual / $target, 1) : 0
-            ];
-
-            $totalActual += $actual;
-            $totalTarget += $target;
-        }
-
-        $overall = $totalTarget > 0 ? round(min($totalActual / $totalTarget, 1) * 100) : 0;
+        $this->aggregator->recalculate($kpi);
+        $tasks = $this->aggregator->breakdown($kpi);
 
         return response()->json([
             'kpi' => $kpi,
             'tasks' => $tasks,
-            'overallProgress' => $overall
+            'overallProgress' => $kpi->percent,
         ]);
-    }
-
-    /**
-     * =====================================================
-     *  HELPER: Tính tổng KPI (tổng actual / tổng target)
-     * =====================================================
-     */
-    private function calculateKPIProgress(KPI $kpi, $userId)
-    {
-        $start = Carbon::parse($kpi->start_date)->toDateString();
-        $end   = Carbon::parse($kpi->end_date)->toDateString();
-
-        $totalActual = 0;
-        $totalTarget = 0;
-
-        foreach ($kpi->tasks as $task) {
-
-            $actual = $this->countCompletedTasks($task->task_title, $userId, $start, $end);
-
-            $target = $task->target_progress ?: 0;
-
-            $totalActual += $actual;
-            $totalTarget += $target;
-        }
-
-        return $totalTarget > 0 ? round(min($totalActual / $totalTarget, 1) * 100) : 0;
-    }
-
-    /**
-     * Helper: Tổng tiến độ task hoàn thành (hỗ trợ cả mô hình pivot & legacy)
-     */
-    private function countCompletedTasks(string $title, int $userId, string $start, string $end): int
-    {
-        $normalizedTitle = strtolower($title);
-
-        // Task được giao qua pivot
-        $pivotCount = DB::table('task_user')
-            ->join('tasks', 'tasks.id', '=', 'task_user.task_id')
-            ->where('task_user.user_id', $userId)
-            ->where('task_user.status', 'Đã hoàn thành')
-            ->whereBetween('tasks.task_date', [$start, $end])
-            ->whereRaw('LOWER(tasks.title) = ?', [$normalizedTitle])
-            ->count();
-
-        // Task legacy (không có bản ghi pivot)
-        $legacyCount = Task::query()
-            ->whereRaw('LOWER(title) = ?', [$normalizedTitle])
-            ->where('user_id', $userId)
-            ->whereBetween('task_date', [$start, $end])
-            ->where('status', 'Đã hoàn thành')
-            ->whereDoesntHave('users', fn($q) => $q->where('users.id', $userId))
-            ->count();
-
-        return $pivotCount + $legacyCount;
     }
 }

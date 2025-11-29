@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Badge, Form, Table } from 'react-bootstrap';
+import { Button, Form, Table } from 'react-bootstrap';
 import { FaPlus } from 'react-icons/fa';
 import Select, { SingleValue } from 'react-select';
 import Swal from 'sweetalert2';
@@ -17,6 +17,13 @@ import NotificationBell from '../components/NotificationBell';
 
 type OptionType = { value: string; label: string };
 
+interface TaskFile {
+  id: number;
+  original_name: string;
+  url: string;
+  size: number;
+}
+
 interface Task {
   id: number;
   title: string;
@@ -30,6 +37,7 @@ interface Task {
   progress?: number;
   detail?: string;
   file_link?: string;
+  files?: TaskFile[];
   status: 'Đã hoàn thành' | 'Chưa hoàn thành';
   task_goal?: number;
   done_count?: number;   // số người hoàn thành
@@ -120,6 +128,7 @@ export default function TaskIndex({ tasks }: Props) {
         return {
           ...t,
           users: usersArray,
+          files: Array.isArray(t.files) ? t.files : [],
           total_count: total,
           done_count: done,
           task_goal: goal,
@@ -246,9 +255,9 @@ export default function TaskIndex({ tasks }: Props) {
               ...t,
               status: data.my_status,
               progress: t.progress, // % cá nhân
-              task_goal: data.task_goal,  // mục tiêu gốc
-              done_count: data.done_count,
-              total_count: data.total_count,
+              total_count: data.total_count ?? t.total_count,
+              done_count: data.done_count ?? t.done_count,
+              task_goal: t.task_goal ?? data.total_count ?? t.total_count ?? 1,
             }
             : t
         )
@@ -290,18 +299,20 @@ export default function TaskIndex({ tasks }: Props) {
   };
 
 
-  const getPriorityColor = (priority?: string) => {
+  const clampProgress = (value?: number) => Math.max(0, Math.min(100, value ?? 0));
+
+  const getPriorityTone = (priority?: string) => {
     switch (priority) {
       case 'Khẩn cấp':
         return 'danger';
       case 'Cao':
         return 'warning';
       case 'Trung bình':
-        return 'primary';
+        return 'info';
       case 'Thấp':
-        return 'secondary';
+        return 'muted';
       default:
-        return 'light';
+        return 'muted';
     }
   };
   const getCurrentDayInfo = () => {
@@ -383,7 +394,7 @@ export default function TaskIndex({ tasks }: Props) {
 
 
 
-      <div className="card shadow-sm rounded-4 p-4 bg-white">
+      <div className="card shadow-sm rounded-4 p-4 bg-white tasks-board-card">
 
         {/* {editingTask && (
         <SidebarEditTask
@@ -598,8 +609,8 @@ export default function TaskIndex({ tasks }: Props) {
         )}
 
         {/* Table */}
-        <div className="table-responsive">
-          <Table hover className="align-middle">
+        <div className="table-responsive task-table-wrapper">
+          <Table hover className="align-middle task-table">
             <thead className="table-light text-center thead-small">
               <tr>
                 <th className="truncate-cell" title="Ngày">Ngày</th>
@@ -632,7 +643,7 @@ export default function TaskIndex({ tasks }: Props) {
                   <tr
                     key={task.id}
                     id={`task-row-${task.id}`}
-                    className={task.status === 'Đã hoàn thành' ? 'task-done-row' : ''}
+                    className={`task-row ${task.status === 'Đã hoàn thành' ? 'task-done-row task-row-done' : ''}`}
                   >
                     <td className="text-center truncate-cell" title={formatDate(task.task_date)}>{formatDate(task.task_date)}</td>
                     <td className="text-center truncate-cell" title={formatDate(task.deadline_at)}>
@@ -644,14 +655,14 @@ export default function TaskIndex({ tasks }: Props) {
                     <td className="text-center truncate-cell" title={task.type || '-'}>{task.type || '-'}</td>
                     <td className="text-center">
                       {Array.isArray(task.users) && task.users.length > 0 ? (
-                        <div className="d-flex flex-column align-items-center">
+                        <div className="d-flex flex-column align-items-center gap-1 task-assignee-list">
                           {task.users.map((u: any, idx: number) => {
                             const matched = users.find((x) => x.id === u.id);
                             const avatarUrl = matched?.avatar
                               ? (matched.avatar.startsWith("http") ? matched.avatar : `/storage/${matched.avatar}`)
                               : "https://www.w3schools.com/howto/img_avatar.png";
                             return (
-                              <div key={idx} className="d-flex align-items-center gap-1 mb-1">
+                              <div key={idx} className="d-flex align-items-center gap-2 task-assignee-item">
                                 <img
                                   src={avatarUrl}
                                   alt="avatar"
@@ -675,26 +686,75 @@ export default function TaskIndex({ tasks }: Props) {
                         <span className="text-truncate">{user?.name || task.supervisor || '-'}</span>
                       </div>
                     </td>
-                    <td className="text-center truncate-cell"
-                      title={`Người hoàn thành: ${task.done_count ?? 0}/${task.total_count ?? 0} • Mục tiêu: ${task.task_goal ?? 1}`}>
-                      {(task.done_count ?? 0)}/{(task.total_count ?? 0)}
+                    <td className="text-center">
+                      {(() => {
+                        const participants = Math.max(
+                          1,
+                          task.total_count
+                            ?? (Array.isArray(task.users) ? task.users.length : 0)
+                            ?? 1,
+                        );
+                        const done = Math.min(
+                          participants,
+                          task.done_count
+                            ?? (Array.isArray(task.users)
+                              ? task.users.filter((u: any) => u.pivot?.status === 'Đã hoàn thành').length
+                              : 0),
+                        );
+                        const percent = clampProgress((done / participants) * 100);
+                        return (
+                          <div className="task-progress-bar" title={`Đã hoàn thành ${done}/${participants}`}>
+                            <div className="task-progress-bar__track">
+                              <div className="task-progress-bar__fill" style={{ width: `${percent}%` }} />
+                            </div>
+                            <span className="task-progress-bar__value">{done}/{participants}</span>
+                          </div>
+                        );
+                      })()}
                     </td>
 
-                    <td className="text-center truncate-cell" title={`${task.progress ?? 0}%`}>
-                      {task.progress ?? 0}
+                    <td className="text-center">
+                      {(() => {
+                        const goal = Math.max(1, task.task_goal ?? task.total_count ?? 1);
+                        return (
+                          <span
+                            className="task-goal-chip"
+                            title={`Mục tiêu: ${goal}`}
+                          >
+                            {goal}
+                          </span>
+                        );
+                      })()}
                     </td>
 
 
-                    <td className="text-center truncate-cell">
-                      <Badge bg={getPriorityColor(task.priority)}>{task.priority || '-'}</Badge>
+                    <td className="text-center">
+                      <span className={`task-priority-pill priority-${getPriorityTone(task.priority)}`}>
+                        {task.priority || 'Không'}
+                      </span>
                     </td>
                     <td className="text-center truncate-cell" title={task.detail || '-'}>{task.detail || '-'}</td>
-                    <td className="text-center truncate-cell" title={task.file_link || '-'}>
+                    <td className="text-center truncate-cell" title="Tệp đính kèm">
+                      {Array.isArray(task.files) && task.files.length > 0 && (
+                        <div className="d-flex flex-column gap-1 mb-1">
+                          {task.files.map(file => (
+                            <a
+                              key={file.id}
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="attachment-pill"
+                            >
+                              {file.original_name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       {task.file_link
                         ? task.file_link.split(',').map((link, i) => (
                           <a key={i} href={link.trim()} target="_blank" rel="noopener noreferrer">Link {i + 1}<br /></a>
                         ))
-                        : '-'}
+                        : (!task.files || task.files.length === 0 ? '-' : null)}
                     </td>
                     <td className="text-center">
                       <Form.Check type="switch" id={`task-${task.id}`} checked={task.status === 'Đã hoàn thành'} onChange={() => handleToggle(task)} />

@@ -68,6 +68,11 @@ class Task extends Model
             ->withTimestamps();
     }
 
+    public function files()
+    {
+        return $this->hasMany(TaskFile::class);
+    }
+
     public function assignedByUser()
     {
         return $this->belongsTo(\App\Models\User::class, 'assigned_by');

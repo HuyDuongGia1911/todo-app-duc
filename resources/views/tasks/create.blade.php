@@ -3,7 +3,7 @@
 @section('content')
 <h1>Thêm công việc mới</h1>
 
-<form method="POST" action="{{ route('tasks.store') }}">
+<form method="POST" action="{{ route('tasks.store') }}" enctype="multipart/form-data">
     @csrf
     <input type="hidden" name="redirect_back" value="{{ route('tasks.index') }}">
 
@@ -11,28 +11,32 @@
         <label>Ngày:</label>
         <input type="date" name="task_date" class="form-control" value="{{ now()->toDateString() }}">
     </div>
-    
 
-    @foreach ([
-    ['name' => 'shift', 'label' => 'Ca', 'api' => '/api/shifts', 'field' => 'shift_name', 'title' => 'Quản lý Ca Làm'],
-    ['name' => 'type', 'label' => 'Loại', 'api' => '/api/types', 'field' => 'type_name', 'title' => 'Quản lý Loại Task'],
-    ['name' => 'title', 'label' => 'Tên task', 'api' => '/api/titles', 'field' => 'title_name', 'title' => 'Quản lý Tên Task'],
-    ['name' => 'supervisor', 'label' => 'Người phụ trách', 'api' => '/api/supervisors', 'field' => 'supervisor_name', 'title' => 'Quản lý Người phụ trách'],
-    ] as $dropdown)
+    @php
+        $taskDropdowns = [
+            ['name' => 'shift', 'label' => 'Ca', 'api' => '/api/shifts', 'field' => 'shift_name', 'title' => 'Quản lý Ca Làm'],
+            ['name' => 'type', 'label' => 'Loại', 'api' => '/api/types', 'field' => 'type_name', 'title' => 'Quản lý Loại Task'],
+            ['name' => 'title', 'label' => 'Tên task', 'api' => '/api/titles', 'field' => 'title_name', 'title' => 'Quản lý Tên Task'],
+            ['name' => 'supervisor', 'label' => 'Người phụ trách', 'api' => '/api/supervisors', 'field' => 'supervisor_name', 'title' => 'Quản lý Người phụ trách'],
+            ['name' => 'status', 'label' => 'Trạng thái', 'api' => '/api/statuses', 'field' => 'status_name', 'title' => 'Quản lý Trạng thái'],
+        ];
+    @endphp
+
+    @foreach ($taskDropdowns as $dropdown)
     <div class="mb-3">
-        <label>{{ $dropdown['label'] }}:</label>
+        <label>{{ $dropdown["label"] }}:</label>
         <div class="input-group">
-            <select name="{{ $dropdown['name'] }}" class="form-control" id="{{ $dropdown['name'] }}-select"
-                data-api="{{ $dropdown['api'] }}"
-                data-field="{{ $dropdown['field'] }}"
-                data-title="{{ $dropdown['title'] }}">
+            <select name="{{ $dropdown["name"] }}" class="form-control" id="{{ $dropdown["name"] }}-select"
+                data-dropdown-select
+                data-api="{{ $dropdown["api"] }}"
+                data-field="{{ $dropdown["field"] }}"
+                data-title="{{ $dropdown["title"] }}">
             </select>
             <button type="button" class="btn btn-outline-secondary"
-                onclick="openManageModal(
-                        '{{ $dropdown['api'] }}',
-                        '{{ $dropdown['field'] }}',
-                        '{{ $dropdown['title'] }}'
-                    )">
+                data-manage-button
+                data-api="{{ $dropdown["api"] }}"
+                data-field="{{ $dropdown["field"] }}"
+                data-title="{{ $dropdown["title"] }}">
                 ⚙️
             </button>
         </div>
@@ -56,6 +60,11 @@
     <div class="mb-3">
         <label>Chi tiết:</label>
         <textarea name="detail" class="form-control" rows="2"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label>Tệp đính kèm (tối đa 10MB/tệp):</label>
+        <input type="file" name="attachments[]" class="form-control" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt">
     </div>
 
     <div class="mb-3">
@@ -89,8 +98,10 @@
 
 <script>
     // Dùng chung cho tất cả dropdown
-    function setupDropdown(selectId, apiUrl, fieldName, modalTitle) {
-        const select = $('#' + selectId);
+    function setupDropdown(selectElement) {
+        const apiUrl = selectElement.dataset.api;
+        const fieldName = selectElement.dataset.field;
+        const select = $(selectElement);
 
         async function loadOptions() {
             try {
@@ -98,11 +109,13 @@
                 const data = await res.json();
                 select.empty();
                 data.forEach(item => select.append(new Option(item[fieldName], item[fieldName])));
-                select.select2({
-                    tags: true,
-                    placeholder: 'Chọn hoặc nhập...',
-                    width: '100%'
-                });
+                if (!select.data('select2')) {
+                    select.select2({
+                        tags: true,
+                        placeholder: 'Chọn hoặc nhập...',
+                        width: '100%'
+                    });
+                }
             } catch {
                 alert('Lỗi khi load dữ liệu!');
             }
@@ -128,6 +141,14 @@
         });
 
         loadOptions();
+    }
+
+    function bindManageButtons() {
+        document.querySelectorAll('[data-manage-button]').forEach(button => {
+            button.addEventListener('click', () => {
+                openManageModal(button.dataset.api, button.dataset.field, button.dataset.title);
+            });
+        });
     }
 
     function openManageModal(apiUrl, fieldName, title) {
@@ -182,11 +203,8 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        setupDropdown('shift-select', '/api/shifts', 'shift_name', 'Quản lý Ca Làm');
-        setupDropdown('type-select', '/api/types', 'type_name', 'Quản lý Loại Task');
-        setupDropdown('title-select', '/api/titles', 'title_name', 'Quản lý Tên Task');
-        setupDropdown('supervisor-select', '/api/supervisors', 'supervisor_name', 'Quản lý Người phụ trách');
-        setupDropdown('status-select', '/api/statuses', 'status_name', 'Quản lý Trạng thái');
+        document.querySelectorAll('[data-dropdown-select]').forEach(select => setupDropdown(select));
+        bindManageButtons();
     });
 </script>
 @endsection

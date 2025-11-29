@@ -7,6 +7,9 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
   if (!task) return null;
 
   const [editMode, setEditMode] = useState(false);
+  const [existingFiles, setExistingFiles] = useState(task.files || []);
+  const [newFiles, setNewFiles] = useState([]);
+  const [removeFileIds, setRemoveFileIds] = useState([]);
 
   const [form, setForm] = useState({
     title: '',
@@ -23,7 +26,37 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-  useEffect(() => {
+  const formatVNDate = (value) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('vi-VN');
+  };
+
+  const getPriorityTone = (priority) => {
+    switch (priority) {
+      case 'Khẩn cấp':
+        return 'danger';
+      case 'Cao':
+        return 'warning';
+      case 'Trung bình':
+        return 'info';
+      case 'Thấp':
+        return 'muted';
+      default:
+        return 'muted';
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '0 KB';
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
+
+  const resetFormState = () => {
     setForm({
       title: task.title || '',
       task_date: task.task_date || '',
@@ -36,6 +69,13 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
       file_link: task.file_link || '',
       progress: task.progress || '',
     });
+    setExistingFiles(task.files || []);
+    setNewFiles([]);
+    setRemoveFileIds([]);
+  };
+
+  useEffect(() => {
+    resetFormState();
     setEditMode(false);
   }, [task]);
 
@@ -48,23 +88,45 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
     e.preventDefault();
 
     try {
+      const payload = new FormData();
+      payload.append('_method', 'PUT');
+
+      Object.entries({
+        ...form,
+        deadline_at: form.deadline_at || form.task_date,
+      }).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          payload.append(key, value);
+        }
+      });
+
+      newFiles.forEach(file => payload.append('attachments[]', file));
+      removeFileIds.forEach(id => payload.append('remove_attachment_ids[]', id));
+
       const res = await fetch(`/tasks/${task.id}`, {
-        method: 'PUT',
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json",
           "X-CSRF-TOKEN": csrf,
         },
-        body: JSON.stringify({
-          ...form,
-          deadline_at: form.deadline_at || form.task_date,
-        }),
+        body: payload,
       });
 
       if (!res.ok) throw new Error("Cập nhật thất bại");
 
       const data = await res.json();
-      onSuccess?.(data);
+      const parsedGoal = Number(form.progress);
+      const normalized = {
+        ...data,
+        task_goal: Number.isFinite(parsedGoal) && parsedGoal > 0
+          ? parsedGoal
+          : data.task_goal ?? (data.users?.length || 1),
+        files: data.files || [],
+      };
+      onSuccess?.(normalized);
+      setExistingFiles(normalized.files);
+      setNewFiles([]);
+      setRemoveFileIds([]);
       Swal.fire("Thành công", "Đã cập nhật công việc", "success");
       setEditMode(false);
 
@@ -75,11 +137,49 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
   const disable = !editMode;
 
-  return (
-    <Form onSubmit={handleSubmit}>
-      <h4 className="mb-3">Chi tiết công việc</h4>
+  const toggleRemoveFile = (fileId) => {
+    setRemoveFileIds(prev =>
+      prev.includes(fileId)
+        ? prev.filter(id => id !== fileId)
+        : [...prev, fileId]
+    );
+  };
 
-      <Row className="g-3">
+  return (
+    <Form onSubmit={handleSubmit} className="task-edit-form">
+      <div className="task-edit-panel mb-4">
+        <div className="task-edit-header">
+          <div>
+            <p className="task-edit-subtitle">Đang chỉnh sửa</p>
+            <h4 className="task-edit-title">{task.title || 'Chưa đặt tên'}</h4>
+          </div>
+          <span
+            className={`task-priority-pill priority-${getPriorityTone(form.priority || task.priority)}`}
+          >
+            {form.priority || task.priority || 'Không xác định'}
+          </span>
+        </div>
+
+        <div className="task-edit-meta">
+          <div className="task-edit-meta-item">
+            <span>Ngày thực hiện</span>
+            <strong>{formatVNDate(form.task_date || task.task_date)}</strong>
+          </div>
+          <div className="task-edit-meta-item">
+            <span>Hạn hoàn thành</span>
+            <strong>{formatVNDate(form.deadline_at || task.deadline_at || form.task_date)}</strong>
+          </div>
+          <div className="task-edit-meta-item">
+            <span>Người phụ trách</span>
+            <strong>{form.supervisor || task.supervisor || '—'}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="task-edit-section">
+        <div className="task-edit-section__title">Thông tin chung</div>
+
+        <Row className="g-4">
 
         {/* TIÊU ĐỀ */}
         <Col md={6}>
@@ -175,7 +275,7 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* PRIORITY */}
         <Col md={6}>
-          <Form.Group>
+          <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Độ ưu tiên</Form.Label>
             <Form.Select
               name="priority"
@@ -192,10 +292,10 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
           </Form.Group>
         </Col>
 
-        {/* PROGRESS */}
+        {/* PROGRESS / GOAL */}
         <Col md={6}>
-          <Form.Group>
-            <Form.Label className="label-inside">Tiến độ (%)</Form.Label>
+          <Form.Group className="input-wrapper">
+            <Form.Label className="label-inside">Mục tiêu (số lượng)</Form.Label>
             <Form.Control
               type="number"
               name="progress"
@@ -210,8 +310,8 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* FILE */}
         <Col md={12}>
-          <Form.Group>
-            <Form.Label className="label-inside">File liên quan</Form.Label>
+          <Form.Group className="input-wrapper">
+            <Form.Label className="label-inside">Chèn link (phân cách bằng dấu phẩy)</Form.Label>
             <Form.Control
               type="text"
               name="file_link"
@@ -225,8 +325,8 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
 
         {/* CHI TIẾT */}
         <Col md={12}>
-          <Form.Group>
-            <Form.Label className="label-inside">Chi tiết</Form.Label>
+          <Form.Group className="input-wrapper input-wrapper--textarea">
+            <Form.Label className="label-inside">Chi tiết công việc</Form.Label>
             <Form.Control
               as="textarea"
               name="detail"
@@ -239,10 +339,75 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
           </Form.Group>
         </Col>
 
-      </Row>
+        </Row>
+      </div>
+
+      <div className="task-edit-section">
+        <div className="task-edit-section__title">Tệp đính kèm</div>
+
+        {existingFiles.length === 0 ? (
+          <p className="text-muted mb-3">Chưa có tệp nào.</p>
+        ) : (
+          <ul className="attachment-list mb-3">
+            {existingFiles.map(file => {
+              const markedForRemoval = removeFileIds.includes(file.id);
+              return (
+                <li
+                  key={file.id}
+                  className={`attachment-list__item ${markedForRemoval ? 'attachment-list__item--remove' : ''}`}
+                >
+                  <a href={file.url} target="_blank" rel="noopener noreferrer">
+                    {file.original_name}
+                  </a>
+                  <span className="text-muted small">{formatFileSize(file.size)}</span>
+                  {editMode && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => toggleRemoveFile(file.id)}
+                    >
+                      {markedForRemoval ? 'Bỏ xoá' : 'Xoá'}
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <Form.Group className="input-wrapper">
+          <Form.Label className="label-inside">Thêm tệp mới</Form.Label>
+          <Form.Control
+            type="file"
+            multiple
+            disabled={disable}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+            onChange={(e) => {
+              setNewFiles(Array.from(e.target.files || []));
+              e.target.value = '';
+            }}
+          />
+          {newFiles.length > 0 && (
+            <ul className="attachment-list mt-2">
+              {newFiles.map((file, idx) => (
+                <li key={`${file.name}-${idx}`} className="attachment-list__item">
+                  <span>{file.name}</span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setNewFiles(prev => prev.filter((_, i) => i !== idx))}
+                  >
+                    Gỡ
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Form.Group>
+      </div>
 
       {/* BUTTON BAR */}
-      <div className="d-flex justify-content-end gap-2 mt-4">
+      <div className="task-edit-actions">
 
         {!editMode && (
           <>
@@ -257,15 +422,21 @@ export default function TaskDetailForm({ task, onSuccess, onCancel }) {
         )}
 
         {editMode && (
-          <>
-            <Button variant="secondary" onClick={() => setEditMode(false)}>
+          <div className="d-flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                resetFormState();
+                setEditMode(false);
+              }}
+            >
               Huỷ
             </Button>
 
             <Button type="submit" variant="success">
               Lưu thay đổi
             </Button>
-          </>
+          </div>
         )}
 
       </div>

@@ -29,6 +29,7 @@ export default function SummaryIndex() {
   const [viewing, setViewing] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState({ month: '', title: '', content: '' });
+  const [previewing, setPreviewing] = useState(false);
 
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
@@ -85,6 +86,28 @@ export default function SummaryIndex() {
       setForm({ month: '', title: '', content: '' });
     } catch {
       Swal.fire('Lỗi', 'Không thể thêm báo cáo!', 'error');
+    }
+  };
+
+  const fetchPreview = async (month) => {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      setPreviewing(false);
+      return;
+    }
+    setPreviewing(true);
+    try {
+      const res = await fetch(`/summaries/preview?month=${month}`);
+      if (!res.ok) throw new Error();
+      const payload = await res.json();
+      setForm(f => ({
+        ...f,
+        title: payload.title || f.title,
+        content: payload.content || f.content,
+      }));
+    } catch {
+      Swal.fire('Lỗi', 'Không tạo được gợi ý nội dung báo cáo!', 'error');
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -431,7 +454,12 @@ export default function SummaryIndex() {
           <div className="mb-3">
             <label className="form-label">Tháng</label>
             <input type="month" className="form-control" value={form.month}
-              onChange={e => setForm(f => ({ ...f, month: e.target.value }))} required />
+              onChange={e => {
+                const { value } = e.target;
+                setForm(f => ({ ...f, month: value }));
+                fetchPreview(value);
+              }} required />
+            {previewing && <small className="text-muted">Đang sinh nội dung tự động...</small>}
           </div>
           <div className="mb-3">
             <label className="form-label">Tiêu đề</label>

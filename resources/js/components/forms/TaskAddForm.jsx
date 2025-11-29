@@ -17,6 +17,7 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
         progress: '',
     });
 
+    const [attachments, setAttachments] = useState([]);
     const [submitting, setSubmitting] = useState(false);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -67,18 +68,30 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
             }
 
             // 2️⃣ Tạo task
+            const payload = new FormData();
+            const normalized = {
+                ...form,
+                status: 'Chưa hoàn thành',
+                deadline_at: form.deadline_at || form.task_date,
+            };
+
+            Object.entries(normalized).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    payload.append(key, value);
+                }
+            });
+
+            attachments.forEach(file => {
+                payload.append('attachments[]', file);
+            });
+
             const res = await fetch('/tasks', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     Accept: 'application/json',
                     'X-CSRF-TOKEN': csrf,
                 },
-                body: JSON.stringify({
-                    ...form,
-                    status: 'Chưa hoàn thành',
-                    deadline_at: form.deadline_at || form.task_date,
-                }),
+                body: payload,
             });
 
             if (!res.ok) {
@@ -108,9 +121,14 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
             // 4️⃣ Chuẩn hoá dữ liệu đếm để không cần reload
             task.total_count = task.users?.length || 1;
             task.done_count = 0;
-            task.task_goal = task.total_count;
+            const parsedGoal = Number(form.progress);
+            task.task_goal = Number.isFinite(parsedGoal) && parsedGoal > 0
+                ? parsedGoal
+                : task.total_count;
+            task.files = task.files || [];
 
             onSuccess?.(task);
+            setAttachments([]);
         } catch (err) {
             console.error(err);
             Swal.fire('Lỗi', 'Không thể thêm công việc', 'error');
@@ -250,6 +268,39 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
                             onChange={handleChange}
                             placeholder="Link file, phân cách bằng dấu phẩy"
                         />
+                    </Form.Group>
+                </Col>
+
+                <Col md={12}>
+                    <Form.Group className="input-wrapper">
+                        <Form.Label className="label-inside">Tệp đính kèm (tối đa 10MB/tệp)</Form.Label>
+                        <Form.Control
+                            type="file"
+                            multiple
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                            onChange={(e) => {
+                                setAttachments(Array.from(e.target.files || []));
+                                e.target.value = '';
+                            }}
+                        />
+                        {attachments.length > 0 && (
+                            <ul className="attachment-list mt-2">
+                                {attachments.map((file, idx) => (
+                                    <li key={`${file.name}-${idx}`} className="attachment-list__item">
+                                        <span>{file.name}</span>
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            onClick={() =>
+                                                setAttachments(prev => prev.filter((_, i) => i !== idx))
+                                            }
+                                        >
+                                            Gỡ
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </Form.Group>
                 </Col>
 

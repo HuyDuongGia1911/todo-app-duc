@@ -213,8 +213,9 @@ export default function KpiTab() {
               <th style={{ width: 120 }}>Tháng</th>
               <th>Tên KPI</th>
               <th style={{ width: 220 }}>Người dùng</th>
-              <th style={{ width: 140 }}>Mục tiêu</th>
-              <th style={{ width: 140 }}>Tiến độ</th>
+              <th style={{ width: 130 }}>Mục tiêu</th>
+              <th style={{ width: 130 }}>Đạt được</th>
+              <th style={{ width: 130 }}>Tiến độ</th>
               <th style={{ width: 160 }}>Hành động</th>
             </tr>
           </thead>
@@ -233,6 +234,7 @@ export default function KpiTab() {
                   <td>{k.name}</td>
                   <td>{getUserName(k.user_id)}</td>
                   <td>{k.target ?? 0}</td>
+                  <td>{k.actual ?? 0}</td>
                   <td>{Number(k.progress ?? 0)}%</td>
                   <td>
                     <button

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class KPITask extends Model
 {
     protected $table = 'kpi_tasks';
-    protected $fillable = ['kpi_id', 'task_title', 'target_progress'];
+    protected $fillable = ['kpi_id', 'task_title', 'target_progress', 'completed_unit'];
 
     public function kpi()
     {
