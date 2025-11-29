@@ -59,6 +59,7 @@ interface Props {
 export default function TaskIndex({ tasks }: Props) {
   const [taskList, setTaskList] = useState<Task[]>(tasks);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isEditingMode, setIsEditingMode] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [tab, setTab] = useState<'all' | 'done' | 'pending' | 'overdue'>('all');
   const [priorityFilter, setPriorityFilter] = useState<SingleValue<OptionType>>(null);
@@ -767,7 +768,10 @@ export default function TaskIndex({ tasks }: Props) {
                           size="sm"
                           variant="link"
                           className="p-0 text-secondary"
-                          onClick={() => setEditingTask(task)}
+                          onClick={() => {
+                            setEditingTask(task);
+                            setIsEditingMode(false);
+                          }}
                           title="Sửa"
                         // disabled={task.status === 'Đã hoàn thành'}
                         >
@@ -857,16 +861,27 @@ export default function TaskIndex({ tasks }: Props) {
           />
         </Modal>
       )}
-      <Modal isOpen={!!editingTask}
-        title="Sửa công việc"
-        onClose={() => setEditingTask(null)}
+      <Modal
+        isOpen={!!editingTask}
+        title={isEditingMode ? 'Sửa công việc' : 'Chi tiết công việc'}
+        size="xl"
+        dialogClassName="modal-extra-wide"
+        onClose={() => {
+          setEditingTask(null);
+          setIsEditingMode(false);
+        }}
       >
         <TaskEditForm
           task={editingTask}
-          onCancel={() => setEditingTask(null)}
+          onCancel={() => {
+            setEditingTask(null);
+            setIsEditingMode(false);
+          }}
+          onModeChange={setIsEditingMode}
           onSuccess={(updatedTask) => {
             setTaskList(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
             setEditingTask(null);
+            setIsEditingMode(false);
           }}
         />
       </Modal>

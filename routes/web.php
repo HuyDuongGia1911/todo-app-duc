@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TaskCommentController;
 use App\Http\Controllers\KPIController;
 use App\Http\Controllers\TaskExportController;
 use App\Http\Controllers\MonthlySummaryController;
@@ -44,6 +45,8 @@ Route::middleware(['auth'])->group(function () {
     //  task crud (sau khi gộp controller)
     Route::resource('tasks', TaskController::class)->except(['show']);
     Route::get('/tasks/export', [TaskController::class, 'export'])->name('tasks.export');
+    Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']);
+    Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']);
     //  kpi quản lý
     Route::get('/kpis/export', [KPIController::class, 'export'])->name('kpis.export'); //lí do đặt trước là do resource che mất
     Route::get('/kpis/{kpi}/json', [KPIController::class, 'showJson']);

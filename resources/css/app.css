@@ -161,6 +161,25 @@
   padding-top: 4px;
 }
 
+.assignee-select__control {
+  border-radius: 12px !important;
+  min-height: 46px !important;
+}
+
+.assignee-select__multi-value {
+  background-color: rgba(99, 102, 241, 0.14) !important;
+  border-radius: 999px !important;
+}
+
+.assignee-select__multi-value__label {
+  color: #312e81 !important;
+  font-weight: 600;
+}
+
+.assignee-select__multi-value__remove {
+  color: #312e81 !important;
+}
+
 
 
 
@@ -376,6 +395,144 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.modal-extra-wide {
+  max-width: min(1280px, 96vw);
+  width: 96vw;
+}
+
+@media (max-width: 992px) {
+  .modal-extra-wide {
+    width: 100%;
+    max-width: 100%;
+    margin: 1rem;
+  }
+}
+
+.task-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1.4rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 1200px) {
+  .task-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.task-detail-column {
+  min-width: 0;
+}
+
+.task-comments-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  height: clamp(320px, 50vh, 600px);
+}
+
+.task-comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+.task-comments-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-right: 0.25rem;
+}
+
+@media (max-width: 1200px) {
+  .task-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .task-comments-panel {
+    height: auto;
+  }
+}
+
+.task-comment {
+  display: flex;
+  gap: 0.8rem;
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.task-comment--me {
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.4);
+}
+
+.task-comment__avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+}
+
+.task-comment__meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.task-comment__meta strong {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.task-comment__content p {
+  margin: 0.2rem 0 0;
+  color: #1f2937;
+}
+
+.task-comments-form textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  resize: none;
+}
+
+.task-comments-form textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.task-comments-form__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.task-comment-skeleton {
+  width: 100%;
+  height: 80px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #f3f4f6, #ffffff, #f3f4f6);
+  background-size: 200% 100%;
+  animation: profile-skeleton 1.6s ease infinite;
 }
 
 .task-edit-panel {

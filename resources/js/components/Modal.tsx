@@ -7,9 +7,27 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl' | 'fullscreen';
+  dialogClassName?: string;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, title, children, footer, onClose }) => {
+const sizeClassMap: Record<Exclude<ModalProps['size'], undefined | 'md'>, string> = {
+  sm: 'modal-sm',
+  lg: 'modal-lg',
+  xl: 'modal-xl',
+  xxl: 'modal-xxl',
+  fullscreen: 'modal-fullscreen',
+};
+
+const Modal: React.FC<ModalProps> = ({
+  isOpen,
+  title,
+  children,
+  footer,
+  onClose,
+  size = 'lg',
+  dialogClassName,
+}) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -23,9 +41,24 @@ const Modal: React.FC<ModalProps> = ({ isOpen, title, children, footer, onClose 
     return null;
   }
 
+  const dialogClasses = ['modal-dialog'];
+  let sizeClass = '';
+
+  if (size && size !== 'md') {
+    sizeClass = sizeClassMap[size];
+  }
+
+  if (sizeClass) {
+    dialogClasses.push(sizeClass);
+  }
+
+  if (dialogClassName) {
+    dialogClasses.push(dialogClassName);
+  }
+
   const portal = ReactDOM.createPortal(
     <div className="modal fade show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-      <div className="modal-dialog modal-lg">
+      <div className={dialogClasses.join(' ')}>
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>

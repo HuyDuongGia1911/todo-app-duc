@@ -55,17 +55,20 @@ class DashboardApiController extends Controller
 
         return response()->json($result);
     }
-   public function tasksByType()
-{
-    $userId = Auth::id();
+    public function tasksByType()
+    {
+        $userId    = Auth::id();
+        $startDate = Carbon::now()->startOfMonth();
+        $endDate   = Carbon::now()->endOfMonth();
 
-    $data = $this->queryForUser($userId)
-        ->selectRaw('type, COUNT(*) as count')
-        ->groupBy('type')
-        ->get();
+        $data = $this->queryForUser($userId)
+            ->whereBetween('task_date', [$startDate, $endDate])
+            ->selectRaw('type, COUNT(*) as count')
+            ->groupBy('type')
+            ->get();
 
-    return response()->json($data);
-}
+        return response()->json($data);
+    }
 // public function kpiProgress($id)
 // {
 //     $kpi = \App\Models\Kpi::with('tasks')->findOrFail($id);

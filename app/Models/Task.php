@@ -73,6 +73,11 @@ class Task extends Model
         return $this->hasMany(TaskFile::class);
     }
 
+    public function comments()
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
     public function assignedByUser()
     {
         return $this->belongsTo(\App\Models\User::class, 'assigned_by');

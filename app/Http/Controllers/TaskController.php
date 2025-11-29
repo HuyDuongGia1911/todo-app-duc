@@ -212,11 +212,16 @@ class TaskController extends Controller
         $request->validate([
             'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt',
             'remove_attachment_ids.*' => 'integer',
+            'user_ids' => 'nullable|array',
+            'user_ids.*' => 'integer|exists:users,id',
+            'assignees_submitted' => 'nullable|boolean',
         ]);
 
         $this->autoCreateMeta($request);
 
         $data = $request->all();
+
+        unset($data['user_ids'], $data['assignees_submitted']);
 
         // deadline mặc định = task_date nếu không nhập
         if (empty($data['deadline_at']) && !empty($data['task_date'])) {
@@ -224,6 +229,12 @@ class TaskController extends Controller
         }
 
         $task->update($data);
+
+        $assigneesTouched = $request->boolean('assignees_submitted', false);
+
+        if ($assigneesTouched) {
+            $this->syncAssignedUsers($task, $request->input('user_ids', []));
+        }
 
         $this->syncAttachments($request, $task);
 
@@ -501,5 +512,39 @@ class TaskController extends Controller
         ]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function syncAssignedUsers(Task $task, array $userIds): void
+    {
+        $normalized = collect($userIds)
+            ->filter(fn($id) => !empty($id))
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($normalized)) {
+            $normalized = [Auth::id()];
+        }
+
+        $existing = $task->users->mapWithKeys(function ($user) {
+            return [
+                $user->id => [
+                    'status' => $user->pivot->status ?? 'Chưa hoàn thành',
+                    'progress' => $user->pivot->progress ?? 0,
+                ],
+            ];
+        });
+
+        $payload = [];
+        foreach ($normalized as $userId) {
+            $payload[$userId] = $existing[$userId] ?? [
+                'status' => 'Chưa hoàn thành',
+                'progress' => 0,
+            ];
+        }
+
+        $task->users()->sync($payload);
+        $task->load('users');
     }
 }
