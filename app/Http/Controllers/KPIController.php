@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\KPI;
+use App\Models\Task;
 use App\Models\TaskTitle;
 use App\Services\MonthlyKpiAggregator;
 use Carbon\Carbon;
@@ -87,6 +88,7 @@ class KPIController extends Controller
             'task_titles'    => 'array',
             'task_titles.*'  => 'string',
             'target_progresses' => 'array',
+            'completed_units'   => 'array',
             'note'           => 'nullable|string'
         ]);
 
@@ -119,7 +121,7 @@ class KPIController extends Controller
             $kpi->tasks()->create([
                 'task_title' => $title,
                 'target_progress' => $request->target_progresses[$i] ?? 0,
-                'completed_unit' => $request->completed_units[$i] ?? 1,
+                'completed_unit' => $request->completed_units[$i] ?? 0,
             ]);
         }
 
@@ -167,6 +169,7 @@ class KPIController extends Controller
             'task_titles'       => 'array',
             'task_titles.*'     => 'string',
             'target_progresses' => 'array',
+            'completed_units'   => 'array',
             'note'              => 'nullable|string'
         ]);
 
@@ -206,7 +209,7 @@ class KPIController extends Controller
             $kpi->tasks()->create([
                 'task_title' => $title,
                 'target_progress' => $request->target_progresses[$i] ?? 0,
-                'completed_unit' => $request->completed_units[$i] ?? 1,
+                'completed_unit' => $request->completed_units[$i] ?? 0,
             ]);
         }
 
@@ -253,5 +256,47 @@ class KPIController extends Controller
             'tasks' => $tasks,
             'overallProgress' => $kpi->percent,
         ]);
+    }
+
+    public function monthlyTasks(Request $request)
+    {
+        $data = $request->validate([
+            'month' => 'required|date_format:Y-m',
+        ]);
+
+        $month = Carbon::createFromFormat('Y-m', $data['month']);
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+        $userId = auth()->id();
+
+        $tasks = Task::query()
+            ->with(['users' => fn($query) => $query->where('users.id', $userId)])
+            ->where(function ($query) use ($start, $end) {
+                $query->whereBetween('task_date', [$start->toDateString(), $end->toDateString()])
+                    ->orWhereBetween('deadline_at', [$start->toDateString(), $end->toDateString()]);
+            })
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhereHas('users', fn($sub) => $sub->where('users.id', $userId));
+            })
+            ->orderBy('task_date')
+            ->get()
+            ->map(function (Task $task) use ($userId) {
+                $stats = $this->aggregator->taskCompletionStats($task, $userId);
+
+                return [
+                    'id' => $task->id,
+                    'title' => $task->title ?? '(Không tên)',
+                    'priority' => $task->priority,
+                    'status' => $task->status,
+                    'task_date' => $task->task_date,
+                    'goal_units' => $stats['goal_units'],
+                    'actual_units' => $stats['actual_units'],
+                    'completion_ratio' => $stats['completion_ratio'],
+                    'completed' => $stats['completed'],
+                ];
+            });
+
+        return response()->json(['tasks' => $tasks]);
     }
 }

@@ -25,7 +25,19 @@ function useDayInfo() {
   return { weekday, date, session, Icon };
 }
 
-const formatMonth = (d) => (d ? (d.slice(0, 7)) : "");
+const formatMonth = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  }
+  if (typeof value === "string" && value.length >= 7) {
+    return value.slice(0, 7);
+  }
+  return "";
+};
 
 const isOverdue = (kpi) => {
   const end = new Date(kpi.end_date);
@@ -50,6 +62,22 @@ const statusBadge = (status) =>
 
 const ITEMS_PER_PAGE = 7;
 
+const buildEmptyTaskRow = () => ({
+  title: "",
+  target: "",
+  priority: null,
+  goal: null,
+  taskId: null,
+  actual: null,
+  completion_ratio: 0,
+});
+
+const toNumber = (value, fallback = 0) => {
+  if (value === null || value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export default function KpiPage({ initialKpis, filters }) {
   const [kpis, setKpis] = useState(initialKpis || []);
   const [tab, setTab] = useState("all"); // all | done | pending | overdue
@@ -61,6 +89,7 @@ export default function KpiPage({ initialKpis, filters }) {
   const [stats, setStats] = useState({});
   const [filtersState, setFilters] = useState(filters || {});
  const [showAddModal, setShowAddModal] = useState(false);
+  const [prefillLoading, setPrefillLoading] = useState(false);
   const csrfToken = getCsrfToken();
   const { weekday, date, session, Icon } = useDayInfo();
 
@@ -178,11 +207,48 @@ export default function KpiPage({ initialKpis, filters }) {
    month: "",
    name: "",
    note: "",
-   tasks: [{ title: "", target: "" }],
+   tasks: [buildEmptyTaskRow()],
  });
 
+ const handleMonthChange = async (value) => {
+   setCreateForm((f) => ({ ...f, month: value }));
+
+   if (!value) {
+     setCreateForm((f) => ({ ...f, tasks: [buildEmptyTaskRow()] }));
+     return;
+   }
+
+   setPrefillLoading(true);
+   try {
+     const res = await fetch(`/kpis/monthly-tasks?month=${value}`);
+     if (!res.ok) throw new Error('Prefill failed');
+     const data = await res.json();
+     const mapped = (data.tasks || []).map((task) => ({
+       title: task.title || "",
+       target: task.actual_units === null || task.actual_units === undefined
+         ? (task.completed ? "1" : "0")
+         : String(task.actual_units),
+       priority: task.priority || null,
+       goal: task.goal_units ?? null,
+       taskId: task.id,
+       actual: task.actual_units ?? null,
+       completion_ratio: task.completion_ratio ?? 0,
+     }));
+
+     setCreateForm((f) => ({
+       ...f,
+       tasks: mapped.length ? mapped : [buildEmptyTaskRow()],
+    }));
+   } catch (error) {
+     console.error('Không thể tải danh sách công việc cho KPI', error);
+     Swal.fire('Không thể tải công việc', 'Vui lòng thử lại hoặc nhập thủ công.', 'warning');
+   } finally {
+     setPrefillLoading(false);
+   }
+ };
+
  const addTaskRow = () => {
-   setCreateForm((f) => ({ ...f, tasks: [...f.tasks, { title: "", target: "" }] }));
+   setCreateForm((f) => ({ ...f, tasks: [...f.tasks, buildEmptyTaskRow()] }));
  };
  const removeTaskRow = (idx) => {
    setCreateForm((f) => ({ ...f, tasks: f.tasks.filter((_, i) => i !== idx) }));
@@ -190,25 +256,37 @@ export default function KpiPage({ initialKpis, filters }) {
  const updateTaskRow = (idx, field, value) => {
    setCreateForm((f) => {
      const tasks = [...f.tasks];
-     tasks[idx] = { ...tasks[idx], [field]: value };
+     if (!tasks[idx]) {
+       return f;
+     }
+     const nextValue = field === 'target' ? (value === '' ? '' : value) : value;
+     tasks[idx] = { ...tasks[idx], [field]: nextValue };
      return { ...f, tasks };
    });
  };
 
  const resetCreateForm = () => {
-   setCreateForm({ month: "", name: "", note: "", tasks: [{ title: "", target: "" }] });
+   setCreateForm({ month: "", name: "", note: "", tasks: [buildEmptyTaskRow()] });
  };
 
  const createKpi = async (e) => {
    e.preventDefault();
-   // Chuẩn hoá payload theo Blade create: task_titles[], target_progresses[]
-   const payload = {
-     month: createForm.month,
-     name: createForm.name,
-     note: createForm.note,
-    task_titles: createForm.tasks.map(t => t.title).filter(Boolean),
-     target_progresses: createForm.tasks.map(t => t.target).filter(v => v !== ""),
-   };
+  const normalizedTasks = createForm.tasks
+    .map(task => ({
+      title: (task.title || "").trim(),
+      goal: toNumber(task.goal, 0),
+      actual: toNumber(task.target, 0),
+    }))
+    .filter(task => task.title.length > 0);
+
+  const payload = {
+    month: createForm.month,
+    name: createForm.name,
+    note: createForm.note,
+    task_titles: normalizedTasks.map(t => t.title),
+    target_progresses: normalizedTasks.map(t => t.goal),
+    completed_units: normalizedTasks.map(t => t.actual),
+  };
    if (!payload.month || !payload.name) {
      Swal.fire('Thiếu thông tin', 'Vui lòng nhập Tháng và Tên KPI', 'warning');
      return;
@@ -475,7 +553,7 @@ export default function KpiPage({ initialKpis, filters }) {
                 type="month"
                 className="form-control"
                 value={createForm.month}
-                onChange={(e) => setCreateForm(f => ({ ...f, month: e.target.value }))}
+                onChange={(e) => handleMonthChange(e.target.value)}
                 required
               />
             </div>
@@ -505,15 +583,26 @@ export default function KpiPage({ initialKpis, filters }) {
  />
                   </div>
                   <div className="col-md-3">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Mục tiêu"
-                      min={0}
-                      max={100}
-                      value={t.target}
-                      onChange={(e) => updateTaskRow(idx, 'target', e.target.value)}
-                    />
+                    <div className="d-flex flex-column gap-1">
+                      <div className="input-group">
+                        <span className="input-group-text">Số đạt</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          placeholder="0"
+                          min={0}
+                          value={t.target}
+                          onChange={(e) => updateTaskRow(idx, 'target', e.target.value)}
+                        />
+                      </div>
+                      {(t.priority || t.goal !== null) && (
+                        <small className="text-muted">
+                          {t.priority ? `Ưu tiên: ${t.priority}` : ''}
+                          {t.priority && t.goal !== null ? ' • ' : ''}
+                          {t.goal !== null ? `Mục tiêu: ${t.goal}` : ''}
+                        </small>
+                      )}
+                    </div>
                   </div>
                   <div className="col-md-2 text-end">
                     <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => removeTaskRow(idx)}>
@@ -525,6 +614,9 @@ export default function KpiPage({ initialKpis, filters }) {
              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={addTaskRow}>
                 + Thêm công việc
               </button>
+              {prefillLoading && (
+                <div className="text-muted small mt-2">Đang tải danh sách công việc...</div>
+              )}
             </div>
             <div className="col-12">
               <label className="form-label">Ghi chú</label>

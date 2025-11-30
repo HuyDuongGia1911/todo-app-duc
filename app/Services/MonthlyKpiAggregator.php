@@ -9,6 +9,18 @@ use Illuminate\Support\Collection;
 
 class MonthlyKpiAggregator
 {
+    /**
+     * Priority -> weight map. Higher numbers make a task contribute more points to KPI.
+     */
+    protected array $priorityWeights = [
+        'Khẩn cấp' => 4,
+        'Cao' => 3,
+        'Trung bình' => 2,
+        'Thấp' => 1,
+    ];
+
+    protected float $defaultPriorityWeight = 1.0;
+
     public function recalculate(KPI $kpi, bool $persist = true): KPI
     {
         $tasks = $this->fetchTasksForUser($kpi);
@@ -131,24 +143,75 @@ class MonthlyKpiAggregator
 
     protected function resolveContribution(Task $task, int $userId): array
     {
-        $goal = max(0, (int) ($task->progress ?? 0));
-        $actual = 0;
+        $weight = $this->priorityWeights[$task->priority] ?? $this->defaultPriorityWeight;
+        $stats = $this->taskCompletionStats($task, $userId);
 
+        return [$weight, $weight * $stats['completion_ratio']];
+    }
+
+    protected function resolveCompletionRatio(Task $task, int $userId): float
+    {
+        return $this->taskCompletionStats($task, $userId)['completion_ratio'];
+    }
+
+    public function taskCompletionStats(Task $task, int $userId): array
+    {
+        $goal = max(0, (int) ($task->progress ?? 0));
+
+        if ($goal > 0) {
+            $actual = $this->resolveActualUnits($task, $userId, $goal);
+            $ratio = $goal > 0 ? min(1.0, max(0.0, $actual / $goal)) : 0.0;
+
+            return [
+                'goal_units' => $goal,
+                'actual_units' => $actual,
+                'completion_ratio' => $ratio,
+                'completed' => $ratio >= 1.0,
+            ];
+        }
+
+        $completed = $this->isTaskCompleted($task, $userId);
+
+        return [
+            'goal_units' => null,
+            'actual_units' => null,
+            'completion_ratio' => $completed ? 1.0 : 0.0,
+            'completed' => $completed,
+        ];
+    }
+
+    protected function resolveActualUnits(Task $task, int $userId, int $goal): int
+    {
+        if ($goal <= 0) {
+            return 0;
+        }
+
+        $actual = 0;
         $pivot = $task->users->first()?->pivot;
 
         if ($pivot) {
             $actual = (int) ($pivot->progress ?? 0);
             if ($actual <= 0 && ($pivot->status ?? null) === 'Đã hoàn thành') {
-                $actual = $goal > 0 ? $goal : 1;
+                $actual = $goal;
             }
         } elseif ((int) $task->user_id === $userId && $task->status === 'Đã hoàn thành') {
-            $actual = $goal > 0 ? $goal : 1;
-        }
-
-        if ($goal > 0 && $actual > $goal) {
             $actual = $goal;
         }
 
-        return [$goal, max(0, $actual)];
+        if ($actual > $goal) {
+            $actual = $goal;
+        }
+
+        return max(0, $actual);
+    }
+
+    protected function isTaskCompleted(Task $task, int $userId): bool
+    {
+        $pivot = $task->users->first()?->pivot;
+        if ($pivot && ($pivot->status ?? null) === 'Đã hoàn thành') {
+            return true;
+        }
+
+        return (int) $task->user_id === $userId && $task->status === 'Đã hoàn thành';
     }
 }

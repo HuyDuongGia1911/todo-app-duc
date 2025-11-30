@@ -436,7 +436,9 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   flex-direction: column;
   gap: 1rem;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
-  height: clamp(320px, 50vh, 600px);
+  min-height: 320px;
+  height: min(600px, calc(100vh - 260px));
+  max-height: calc(100vh - 220px);
 }
 
 .task-comments-header {
@@ -462,7 +464,9 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   }
 
   .task-comments-panel {
+    min-height: initial;
     height: auto;
+    max-height: none;
   }
 }
 
@@ -562,6 +566,84 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   color: #64748b;
   font-size: 12px;
   margin-bottom: 0.35rem;
+}
+
+.kpi-detail-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  margin-bottom: 1.25rem;
+}
+
+.kpi-detail-progress {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.kpi-detail-status {
+  display: inline-block;
+  padding: 0.2rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.kpi-detail-status--done {
+  background: rgba(16, 185, 129, 0.15);
+  color: #0f766e;
+}
+
+.kpi-detail-status--pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: #92400e;
+}
+
+.kpi-task-section {
+  margin-top: 1rem;
+}
+
+.kpi-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.kpi-task-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 1rem 1.2rem;
+  background: #f8fafc;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.kpi-task-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.kpi-task-card__badge {
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.kpi-task-card__label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.kpi-task-card__footer {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #cbd5f5;
+  font-size: 0.9rem;
+  color: #475569;
 }
 
 .task-edit-meta {
