@@ -18,12 +18,15 @@ use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Style\Conditional;
 use Carbon\Carbon;
 use App\Models\User;
+use App\Support\KpiReportFormatter;
+use App\Services\MonthlyKpiAggregator;
 class SingleMonthlySummaryExport implements FromView, WithEvents, WithColumnWidths, WithColumnFormatting
 {
     protected MonthlySummary $summary;
     protected int $kpiRowCount = 0;
     protected User $user;
     protected array $kpiRows = [];
+    protected MonthlyKpiAggregator $kpiAggregator;
 
     // Màu theo layout mẫu (có thể chỉnh)
     private string $colKpiBg   = 'F8DDBB'; // nền cam nhạt cho cột "Hạng mục KPI"
@@ -32,10 +35,11 @@ class SingleMonthlySummaryExport implements FromView, WithEvents, WithColumnWidt
     private string $okGreen     = '1E7E34'; // xanh chữ "Đạt"
     private string $badRed      = 'C0392B'; // đỏ chữ "Không đạt"
 
-    public function __construct(MonthlySummary $summary)
+    public function __construct(MonthlySummary $summary, MonthlyKpiAggregator $kpiAggregator)
     {
         $this->summary = $summary;
-          $this->user = $summary->user;
+        $this->user = $summary->user;
+        $this->kpiAggregator = $kpiAggregator;
     }
    
 
@@ -55,70 +59,25 @@ class SingleMonthlySummaryExport implements FromView, WithEvents, WithColumnWidt
             ->whereDate('end_date', '>=', $start)
             ->get();
 
-        // Chuẩn hóa tasks_cache (nếu null)
-        $tasksCache = collect($summary->tasks_cache ?? []);
+        $tasksCache = $summary->tasks_cache ?? [];
 
-        // Build các dòng đánh giá KPI
         $kpiRows = [];
 
         foreach ($kpis as $kpi) {
-            foreach ($kpi->tasks as $kpiTask) {
-                $title = $kpiTask->task_title;
+            $rows = KpiReportFormatter::buildTaskRows($kpi, $this->kpiAggregator, $tasksCache);
 
-                // Tìm các entry trong tasks_cache trùng title
-                $related = $tasksCache->filter(function ($t) use ($title) {
-                    return isset($t['title']) && $t['title'] === $title;
-                });
-
-                // Gom ngày và tiến độ thực tế
-               $allDates = [];
-$actual   = 0.0;
-$allLinks = [];
-
-foreach ($related as $item) {
-    $actual += (float)($item['progress'] ?? 0);
-
-    foreach (($item['dates'] ?? []) as $d) {
-        if (!empty($d)) $allDates[] = $d;
-    }
-
-    // ✅ hỗ trợ link đơn
-    if (!empty($item['link']) && is_string($item['link'])) {
-        $allLinks[] = trim($item['link']);
-    }
-
-    // ✅ hỗ trợ links dạng mảng (nếu sau này bạn dùng)
-    if (!empty($item['links']) && is_array($item['links'])) {
-        foreach ($item['links'] as $l) {
-            if (is_string($l) && strlen(trim($l))) {
-                $allLinks[] = trim($l);
-            }
-        }
-    }
-}
-
-sort($allDates);
-$timeRange = count($allDates) > 0 ? ($allDates[0] . ' - ' . end($allDates)) : '';
-$allLinks = array_values(array_unique(array_filter($allLinks)));
-$target  = (float)($kpiTask->target_progress ?? 0);
-$percent = $target > 0 ? round(($actual / $target), 4) : 0;
-$note    = $percent >= 1 ? 'Đạt' : 'Không đạt';
-
-// ✅ loại trùng & ghép bằng dấu phẩy (để Blade explode(',') hiển thị nhiều link)
-$proofLink = implode(', ', array_values(array_unique(array_filter($allLinks))));
-
-
-               $kpiRows[] = [
-    'kpi_name'     => $kpi->name,
-    'task_title'   => $title,
-    'time_range'   => $timeRange,
-    'target'       => $target,
-    'result'       => $actual,
-    'percent'      => $percent,          // 0..1
-    'note'         => $note,
-    'proof_links'  => $allLinks,         // ⬅️ danh sách link
-    'proof_count'  => count($allLinks),  // ⬅️ số link
-];
+            foreach ($rows as $row) {
+                $kpiRows[] = [
+                    'kpi_name' => $row['kpi_name'],
+                    'task_title' => $row['task_title'],
+                    'time_range' => $row['time_range'],
+                    'target' => $row['target'],
+                    'result' => $row['actual'],
+                    'percent' => $row['percent'],
+                    'note' => $row['evaluation'],
+                    'proof_links' => $row['proof_links'] ?? [],
+                    'proof_count' => $row['proof_count'] ?? 0,
+                ];
             }
         }
 
@@ -155,7 +114,7 @@ $this->kpiRows = $kpiRows;
         return [
             'E' => NumberFormat::FORMAT_NUMBER,          // KPI
             'F' => NumberFormat::FORMAT_NUMBER_00,       // Kết quả
-            'G' => NumberFormat::FORMAT_PERCENTAGE_00,   // Tỷ lệ %
+            'G' => NumberFormat::FORMAT_NUMBER_00,       // Tỷ lệ % (đã nhân 100)
         ];
     }
 

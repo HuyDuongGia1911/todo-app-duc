@@ -24,10 +24,19 @@ const formatMonthLabel = (value) => {
   return value;
 };
 
+const pickFirstValue = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return "";
+};
+
 const buildTaskRow = (task = {}) => ({
-  title: task.title || "",
-  goal: task.goal ?? task.target ?? "",
-  actual: task.actual ?? task.result ?? "",
+  title: task.title || task.task_title || "",
+  goal: pickFirstValue(task.goal, task.target, task.target_progress),
+  actual: pickFirstValue(task.actual, task.result, task.completed_unit),
 });
 
 const getCompletionPercent = (task) => {
@@ -59,10 +68,12 @@ export default function KpiDetailModal({ kpiId, onDeleted, onClose, reloadKpis }
   useEffect(() => {
     fetch(`/kpis/${kpiId}/json`, { headers: { Accept: "application/json" } })
       .then(res => res.json())
-      .then(({ kpi, tasks, overallProgress }) => {
+      .then(({ kpi, tasks, breakdown, overallProgress }) => {
         const month = formatMonthValue(kpi.start_date || kpi.end_date);
-        const normalized = (Array.isArray(tasks) ? tasks : [])
-          .map(t => buildTaskRow({ title: t.title, goal: t.target, actual: t.actual }));
+        const sourceTasks = Array.isArray(tasks) && tasks.length
+          ? tasks
+          : (Array.isArray(breakdown) ? breakdown : []);
+        const normalized = sourceTasks.map((task) => buildTaskRow(task));
 
         setForm({
           month,

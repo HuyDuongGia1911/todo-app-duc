@@ -248,12 +248,27 @@ class KPIController extends Controller
      */
     public function showJson(KPI $kpi)
     {
+        $kpi->load('tasks');
         $this->aggregator->recalculate($kpi);
-        $tasks = $this->aggregator->breakdown($kpi);
+
+        $performance = $this->aggregator->breakdown($kpi);
+
+        $taskDefinitions = $kpi->tasks->map(function ($task) {
+            return [
+                'id' => $task->id,
+                'title' => $task->task_title,
+                'task_title' => $task->task_title,
+                'target_progress' => (int) ($task->target_progress ?? 0),
+                'goal' => (int) ($task->target_progress ?? 0),
+                'completed_unit' => (int) ($task->completed_unit ?? 0),
+                'actual' => (int) ($task->completed_unit ?? 0),
+            ];
+        })->values();
 
         return response()->json([
             'kpi' => $kpi,
-            'tasks' => $tasks,
+            'tasks' => $taskDefinitions,
+            'breakdown' => $performance,
             'overallProgress' => $kpi->percent,
         ]);
     }

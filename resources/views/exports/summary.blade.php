@@ -74,7 +74,7 @@
                 <th>Hạng mục công việc</th>
                 <th>Thời gian thực hiện</th>
                 <th style="text-align:right;">KPI</th>
-                <th style="text-align:right;">Kết quả</th>
+                <th style="text-align:right;">Số mục tiêu đạt được</th>
                 <th style="text-align:center;">Tỷ lệ %</th>
                 <th style="text-align:center;">Đánh giá</th>
                   <th style="text-align:center;">Chứng minh KQ</th> 
@@ -89,7 +89,7 @@
                 <td>{{ $row['time_range'] }}</td>
                 <td style="text-align:right;">{{ $row['target'] }}</td>
                 <td style="text-align:right;">{{ $row['result'] }}</td>
-                <td style="text-align:center;">{{ $row['percent'] }}</td>
+                <td style="text-align:center;">{{ rtrim(rtrim(number_format($row['percent'], 2), '0'), '.') }}%</td>
                 <td style="text-align:center;">{{ $row['note'] }}</td>
                <td style="text-align:center;">
     @if(!empty($row['proof_count']) && $row['proof_count'] > 0)

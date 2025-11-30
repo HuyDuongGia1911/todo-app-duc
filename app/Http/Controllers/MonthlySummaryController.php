@@ -12,14 +12,18 @@ use App\Models\Task;
 use App\Exports\SingleMonthlySummaryExport;
 use App\Models\KPI;
 use App\Services\MonthlyReportBuilder;
+use App\Services\MonthlyKpiAggregator;
+use App\Support\KpiReportFormatter;
 
 class MonthlySummaryController extends Controller
 {
     protected MonthlyReportBuilder $reportBuilder;
+    protected MonthlyKpiAggregator $kpiAggregator;
 
-    public function __construct(MonthlyReportBuilder $reportBuilder)
+    public function __construct(MonthlyReportBuilder $reportBuilder, MonthlyKpiAggregator $kpiAggregator)
     {
         $this->reportBuilder = $reportBuilder;
+        $this->kpiAggregator = $kpiAggregator;
     }
     public function index(Request $request)
     {
@@ -59,12 +63,14 @@ class MonthlySummaryController extends Controller
         $month = Carbon::parse($summary->month);
 
         // Lấy tất cả KPI của user trong tháng
+        $taskCache = $summary->tasks_cache ?? [];
+
         $kpis = KPI::with('tasks')
             ->where('user_id', $summary->user_id)
             ->whereDate('start_date', '<=', $month->endOfMonth())
             ->whereDate('end_date', '>=', $month->startOfMonth())
             ->get()
-            ->map(function ($kpi) {
+            ->map(function ($kpi) use ($taskCache) {
                 $tasks = $kpi->tasks;
 
                 // Chỉ lấy task có status === 'Đã hoàn thành'
@@ -74,6 +80,7 @@ class MonthlySummaryController extends Controller
                 $completedTarget = $completedTasks->sum('target_progress');
 
                 $progress = $totalTarget > 0 ? round(($completedTarget / $totalTarget) * 100, 2) : 0;
+                $taskRows = KpiReportFormatter::buildTaskRows($kpi, $this->kpiAggregator, $taskCache);
 
                 return [
                     'id' => $kpi->id,
@@ -82,6 +89,8 @@ class MonthlySummaryController extends Controller
                     'task_names' => $tasks->pluck('task_title')->implode(', '),
                     'task_names_array' => $tasks->pluck('task_title')->toArray(),
                     'task_targets' => $tasks->pluck('target_progress', 'task_title'),
+                    'task_completed_units' => $tasks->pluck('completed_unit', 'task_title'),
+                    'task_rows' => $taskRows,
                     'progress' => $progress,
                     'completed_count' => $completedTasks->count(),
                     'total_count' => $tasks->count(),
@@ -141,7 +150,7 @@ class MonthlySummaryController extends Controller
     public function exportById(MonthlySummary $summary)
     {
         $this->authorizeOwner($summary);
-        return Excel::download(new SingleMonthlySummaryExport($summary), 'summary_' . $summary->month . '.xlsx');
+        return Excel::download(new SingleMonthlySummaryExport($summary, $this->kpiAggregator), 'summary_' . $summary->month . '.xlsx');
     }
 
 

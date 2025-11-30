@@ -1,11 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import Modal from '../Modal';
+
+const normalizeNumber = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatPercentLabel = (value) => {
+  const numeric = normalizeNumber(value);
+  const rounded = Math.round(numeric * 100) / 100;
+  return `${rounded.toFixed(2).replace(/\.00$/, '')}%`;
+};
+
+const evaluatePercent = (value) => {
+  const percent = normalizeNumber(value);
+  if (percent >= 80) return 'Đạt';
+  if (percent <= 30) return 'Không đạt';
+  return 'Chưa đạt';
+};
 
 export default function SummaryDetailModal({ summary, onClose, onSaveContent, onRegenerate, isOpen }) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(summary.content || '');
-  const [selectedKpiId, setSelectedKpiId] = useState(null);
-  const selectedKpi = summary.kpis?.find(kpi => kpi.id === selectedKpiId);
   const handleExportExcel = () => {
     // Xuất theo ID của summary hiện tại
     window.open(`/summaries/${summary.id}/export`, '_blank');
@@ -80,47 +99,47 @@ export default function SummaryDetailModal({ summary, onClose, onSaveContent, on
           Quá hạn: {summary.stats.overdue || 0}
         </div>
       )}
-      {summary.kpis?.length > 0 && (
+      {Array.isArray(summary.kpis) && summary.kpis.some(kpi => kpi.task_rows?.length) && (
         <>
           <h6 className="fw-bold mt-4">Đánh giá KPI</h6>
-          <p><strong>{summary.kpis[0].name}</strong></p>
+          {summary.kpis.map((kpi) => (
+            kpi.task_rows?.length ? (
+              <div key={kpi.id} className="mb-4">
+                <p><strong>{kpi.name}</strong></p>
+                <table className="table table-bordered small">
+                  <thead>
+                    <tr>
+                      <th>Hạng mục KPI</th>
+                      <th>Thời gian thực hiện</th>
+                      <th>KPI</th>
+                      <th>Số mục tiêu đạt được</th>
+                      <th>Tỷ lệ %</th>
+                      <th>Đánh giá</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kpi.task_rows.map((row, idx) => {
+                      const target = normalizeNumber(row.target);
+                      const actual = normalizeNumber(row.actual ?? row.result);
+                      const percent = row.percent !== undefined ? row.percent : (target > 0 ? (actual / target) * 100 : 0);
+                      const rating = row.evaluation || evaluatePercent(percent);
 
-          <table className="table table-bordered small">
-            <thead>
-              <tr>
-                <th>Hạng mục KPI</th>
-                <th>Thời gian thực hiện</th>
-                <th>KPI</th>
-                <th>Kết quả</th>
-                <th>Tỷ lệ %</th>
-                <th>Đánh giá</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(summary.kpis[0].task_names_array || []).map((taskTitle, idx) => {
-                const relatedTasks = summary.tasks_cache?.filter(t => t.title === taskTitle) || [];
-                const dates = relatedTasks.flatMap(t => t.dates || []);
-                const formattedDates = dates.length
-                  ? `${dates[0]} - ${dates[dates.length - 1]}`
-                  : 'Không có';
-                const resultCount = relatedTasks.reduce((sum, t) => sum + (parseFloat(t.progress || 0)), 0);
-                const target = summary.kpis[0].task_targets?.[taskTitle] || 0;
-                const percent = target > 0 ? Math.round((resultCount / target) * 100) : 0;
-                const note = percent >= 100 ? 'Đạt' : 'Không đạt';
-
-                return (
-                  <tr key={idx}>
-                    <td>{taskTitle}</td>
-                    <td>{formattedDates}</td>
-                    <td>{target}</td>
-                    <td>{resultCount}</td>
-                    <td>{percent}%</td>
-                    <td>{note}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      return (
+                        <tr key={`${kpi.id}-${idx}`}>
+                          <td>{row.task_title}</td>
+                          <td>{row.time_range || 'Không có'}</td>
+                          <td>{target}</td>
+                          <td>{actual}</td>
+                          <td>{formatPercentLabel(percent)}</td>
+                          <td>{rating}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null
+          ))}
         </>
       )}
 
