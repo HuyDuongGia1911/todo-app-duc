@@ -13,12 +13,25 @@ use Illuminate\Support\Facades\Auth;
 use App\Exports\TasksExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
-use App\Models\Kpi;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
+        private function authorizeTask(Task $task, bool $allowManager = true): void
+        {
+            $user = Auth::user();
+            if (!$user) {
+                abort(403);
+            }
+
+            $isOwner = $task->user_id === $user->id || $task->users()->where('users.id', $user->id)->exists();
+            $isManager = $allowManager && in_array($user->role, ['Admin', 'Trưởng phòng']);
+
+            if (!$isOwner && !$isManager) {
+                abort(403, 'Bạn không có quyền thao tác công việc này');
+            }
+        }
     /**
      * Helper: Query tất cả task của 1 user — gồm:
      * - Task mô hình cũ: tasks.user_id = $userId
@@ -43,9 +56,13 @@ class TaskController extends Controller
             ->whereDate('task_date', $today)
             ->count();
 
+        $currentMonthStart = $today->copy()->startOfMonth();
+        $currentMonthEnd = $today->copy()->endOfMonth();
+
         $taskOverdue = $this->queryForUser($userId)
             ->where('status', '!=', 'Đã hoàn thành')
-            ->whereDate('deadline_at', '<', $today)
+            ->whereBetween(DB::raw('COALESCE(deadline_at, task_date)'), [$currentMonthStart->toDateString(), $currentMonthEnd->toDateString()])
+            ->whereDate(DB::raw('COALESCE(deadline_at, task_date)'), '<', $today)
             ->count();
 
         $weeklyTasks = $this->queryForUser($userId)
@@ -55,9 +72,12 @@ class TaskController extends Controller
             ])
             ->count();
 
-        $kpisSoon = Kpi::where('user_id', $userId)
-            ->whereDate('end_date', '<=', $today->copy()->addDays(3))
+        $tasksSoon = $this->queryForUser($userId)
             ->where('status', '!=', 'Đã hoàn thành')
+            ->whereBetween(
+                DB::raw('COALESCE(deadline_at, task_date)'),
+                [$today->toDateString(), $today->copy()->addDays(7)->toDateString()]
+            )
             ->count();
 
         return view('dashboard', [
@@ -67,7 +87,7 @@ class TaskController extends Controller
                 'taskToday'    => $taskToday,
                 'taskOverdue'  => $taskOverdue,
                 'weeklyTasks'  => $weeklyTasks,
-                'kpisSoon'     => $kpisSoon,
+                'tasksSoon'    => $tasksSoon,
             ],
         ]);
     }
@@ -197,6 +217,7 @@ class TaskController extends Controller
 
     public function edit(Task $task)
     {
+        $this->authorizeTask($task);
         return view('tasks.edit', [
             'task'        => $task,
             'shifts'      => Shift::all(),
@@ -209,6 +230,7 @@ class TaskController extends Controller
 
     public function update(Request $request, Task $task)
     {
+        $this->authorizeTask($task);
         $request->validate([
             'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt',
             'remove_attachment_ids.*' => 'integer',
@@ -248,6 +270,7 @@ class TaskController extends Controller
 
     public function destroy(Task $task)
     {
+        $this->authorizeTask($task);
         foreach ($task->files as $file) {
             if ($file->path) {
                 Storage::disk('public')->delete($file->path);
@@ -315,6 +338,7 @@ class TaskController extends Controller
 
     public function updateStatus(Request $request, Task $task)
     {
+        $this->authorizeTask($task);
         $validated = $request->validate([
             'status' => 'required|in:Đã hoàn thành,Chưa hoàn thành',
         ]);
@@ -441,56 +465,174 @@ class TaskController extends Controller
             return response()->json([], 401);
         }
 
-        $tasks = Task::query()
-            ->select([
-                'tasks.id',
-                'tasks.title',
-                'tasks.deadline_at',
-                'tasks.priority',
-                'tasks.status',
-                'tasks.supervisor',
-                'tasks.assigned_by',
-                'task_user.status as my_status',
-                'task_user.progress as my_progress',
-                'task_user.created_at as assigned_at',
-                'task_user.read_at as read_at',
-            ])
+        $now = Carbon::now();
+        $soonThreshold = $now->copy()->addDays(3);
+
+        $baseSelect = [
+            'tasks.id',
+            'tasks.title',
+            'tasks.deadline_at',
+            'tasks.task_date',
+            'tasks.priority',
+            'tasks.status',
+            'tasks.supervisor',
+            'tasks.assigned_by',
+            'task_user.status as my_status',
+            'task_user.progress as my_progress',
+            'task_user.created_at as assigned_at',
+            'task_user.read_at as read_at',
+        ];
+
+        $queryForUser = fn() => Task::query()
+            ->select($baseSelect)
             ->join('task_user', function ($join) use ($userId) {
                 $join->on('task_user.task_id', '=', 'tasks.id')
                     ->where('task_user.user_id', '=', $userId);
             })
-            ->with('assignedByUser:id,name,avatar')
+            ->with('assignedByUser:id,name,avatar');
+
+        $latestAssigned = $queryForUser()
             ->orderByDesc('assigned_at')
-            ->limit(5)
-            ->get()
-            ->map(function ($task) {
-                $assignedBy = $task->assignedByUser
-                    ? [
-                        'id'     => $task->assignedByUser->id,
-                        'name'   => $task->assignedByUser->name,
-                        'avatar' => $task->assignedByUser->avatar,
-                    ]
-                    : [
-                        'id'     => null,
-                        'name'   => $task->supervisor,
-                        'avatar' => null,
-                    ];
+            ->limit(25)
+            ->get();
 
+        $deadlineAlerts = $queryForUser()
+            ->where(function ($query) use ($now, $soonThreshold) {
+                $query
+                    ->whereDate(DB::raw('COALESCE(tasks.deadline_at, tasks.task_date)'), '<', $now->toDateString())
+                    ->orWhereBetween(DB::raw('COALESCE(tasks.deadline_at, tasks.task_date)'), [
+                        $now->toDateString(),
+                        $soonThreshold->toDateString(),
+                    ]);
+            })
+            ->where(function ($query) {
+                $query->whereNull('task_user.status')
+                    ->orWhere('task_user.status', '!=', 'Đã hoàn thành');
+            })
+            ->orderBy(DB::raw('COALESCE(tasks.deadline_at, tasks.task_date)'))
+            ->limit(25)
+            ->get();
+
+        $resolveAssignedBy = function ($task) {
+            if ($task->assignedByUser) {
                 return [
-                    'id'          => $task->id,
-                    'title'       => $task->title,
-                    'deadline_at' => $task->deadline_at,
-                    'priority'    => $task->priority,
-                    'status'      => $task->status,
-                    'assigned_at' => $task->assigned_at,
-                    'my_status'   => $task->my_status,
-                    'my_progress' => $task->my_progress,
-                    'read_at'     => $task->read_at,
-                    'assigned_by' => $assignedBy,
+                    'id'     => $task->assignedByUser->id,
+                    'name'   => $task->assignedByUser->name,
+                    'avatar' => $task->assignedByUser->avatar,
                 ];
-            });
+            }
 
-        return response()->json($tasks);
+            return [
+                'id'     => null,
+                'name'   => $task->supervisor,
+                'avatar' => null,
+            ];
+        };
+
+        $resolveAlert = function ($task) use ($now, $soonThreshold) {
+            if (($task->my_status ?? null) === 'Đã hoàn thành') {
+                return [null, null];
+            }
+
+            $deadlineSource = $task->deadline_at ?? $task->task_date;
+
+            if (!$deadlineSource) {
+                return [null, null];
+            }
+
+            try {
+                $deadline = Carbon::parse($deadlineSource);
+            } catch (\Exception $e) {
+                return [null, null];
+            }
+
+            if ($deadline->lt($now)) {
+                return ['overdue', 'Công việc đã quá hạn'];
+            }
+
+            if ($deadline->betweenIncluded($now, $soonThreshold)) {
+                return ['due_soon', 'Còn dưới 3 ngày đến hạn'];
+            }
+
+            return [null, null];
+        };
+
+        $normalize = function ($task, $type = 'assignment', $alertLevel = null, $alertMessage = null) use ($resolveAssignedBy) {
+            return [
+                'id'            => $task->id,
+                'title'         => $task->title,
+                'deadline_at'   => $task->deadline_at,
+                'priority'      => $task->priority,
+                'status'        => $task->status,
+                'assigned_at'   => $task->assigned_at,
+                'my_status'     => $task->my_status,
+                'my_progress'   => $task->my_progress,
+                'read_at'       => $task->read_at,
+                'assigned_by'   => $resolveAssignedBy($task),
+                'type'          => $type,
+                'alert_level'   => $alertLevel,
+                'alert_message' => $alertMessage,
+            ];
+        };
+
+        $items = collect();
+
+        foreach ($latestAssigned as $task) {
+            [$alertLevel, $alertMessage] = $resolveAlert($task);
+            $items[$task->id] = $normalize($task, 'assignment', $alertLevel, $alertMessage);
+        }
+
+        foreach ($deadlineAlerts as $task) {
+            [$alertLevel, $alertMessage] = $resolveAlert($task);
+
+            if (!$alertLevel) {
+                continue;
+            }
+
+            $items[$task->id] = $normalize($task, 'deadline_alert', $alertLevel, $alertMessage);
+        }
+
+        $sorted = $items
+            ->values()
+            ->sort(function ($a, $b) {
+                $aAlert = $a['type'] === 'deadline_alert';
+                $bAlert = $b['type'] === 'deadline_alert';
+
+                if ($aAlert !== $bAlert) {
+                    return $aAlert ? -1 : 1;
+                }
+
+                $aLevel = $a['alert_level'] ?? null;
+                $bLevel = $b['alert_level'] ?? null;
+
+                if ($aLevel !== $bLevel) {
+                    if ($aLevel === 'overdue') {
+                        return -1;
+                    }
+                    if ($bLevel === 'overdue') {
+                        return 1;
+                    }
+                    if ($aLevel) {
+                        return -1;
+                    }
+                    if ($bLevel) {
+                        return 1;
+                    }
+                }
+
+                $aDeadline = $a['deadline_at'] ?? null;
+                $bDeadline = $b['deadline_at'] ?? null;
+
+                if ($aDeadline && $bDeadline && $aDeadline !== $bDeadline) {
+                    return $aDeadline < $bDeadline ? -1 : 1;
+                }
+
+                return strcmp($b['assigned_at'] ?? '', $a['assigned_at'] ?? '');
+            })
+            ->values()
+            ->take(30);
+
+        return response()->json($sorted);
     }
 
     public function markAssignmentAsRead(Task $task)
@@ -512,6 +654,28 @@ class TaskController extends Controller
         ]);
 
         return response()->json(['success' => true]);
+    }
+
+    public function markAllAssignmentsAsRead()
+    {
+        $userId = auth()->id();
+
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $updated = DB::table('task_user')
+            ->where('user_id', $userId)
+            ->whereNull('read_at')
+            ->update([
+                'read_at'    => now(),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'updated' => $updated,
+        ]);
     }
 
     private function syncAssignedUsers(Task $task, array $userIds): void

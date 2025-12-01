@@ -312,25 +312,42 @@ export default function KpiPage({ initialKpis, filters }) {
  };
   return (
     <>
-      <div className="d-flex justify-content-between align-items-center mb-4 w-100">
-        <div className="d-flex flex-column">
-          <h2 className="fw-bold mb-1">Danh sách KPI</h2>
-          <div className="d-flex align-items-center text-muted">
-            <Icon size={20} className="me-2" />
-            <span className="fw-semibold">{session}, {weekday} {date}</span>
+      <section className="workspace-hero mb-4">
+        <div>
+          <p className="workspace-hero__eyebrow">Media KPI Center</p>
+          <h2 className="workspace-hero__title">Danh sách KPI</h2>
+          <p className="workspace-hero__subtitle">
+            Theo dõi hiệu suất chiến dịch và gắn KPI với các hoạt động sáng tạo của team.
+          </p>
+          <div className="workspace-hero__info">
+            <Icon size={18} />
+            <span>{session}, {weekday} {date}</span>
+          </div>
+          <div className="workspace-metrics">
+            {[
+              { label: 'Tổng KPI', value: counts.all },
+              { label: 'Đang chạy', value: counts.pending },
+              { label: 'Quá hạn', value: counts.overdue },
+              { label: 'Đã hoàn thành', value: counts.done },
+            ].map(metric => (
+              <div className="workspace-metric-card" key={metric.label}>
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+              </div>
+            ))}
           </div>
         </div>
-
-        
-       <button
-   type="button"
-   className="btn btn-dark d-flex align-items-center gap-2 rounded-3 py-2 px-3"
-   onClick={() => setShowAddModal(true)}
- >
-   <FaPlus /> Thêm KPI
- </button>
-      </div>
-      <div className="card shadow-sm rounded-4 p-4 bg-white">
+        <div className="workspace-hero__actions">
+          <button
+            type="button"
+            className="glow-button"
+            onClick={() => setShowAddModal(true)}
+          >
+            <FaPlus /> Thêm KPI
+          </button>
+        </div>
+      </section>
+      <div className="workspace-card">
         {/* Heading + Add button */}
 
 
@@ -356,26 +373,24 @@ export default function KpiPage({ initialKpis, filters }) {
         </div>
 
         {/* Filters (tháng + search) */}
-        <div className="row align-items-center mb-3">
-          <div className="col-md-4">
-            <Form.Control
-              type="month"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              placeholder="Chọn tháng"
-            />
-          </div>
-          <div className="col-md-8 text-end">
-            <Form onSubmit={(e) => e.preventDefault()}>
-              <div className="d-flex">
-                <Form.Control
-                  type="text"
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  placeholder="Tìm theo tên KPI..."
-                />
-              </div>
-            </Form>
+        <div className="workspace-filters mb-3">
+          <div className="row g-3 w-100">
+            <div className="col-md-4">
+              <Form.Control
+                type="month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                placeholder="Chọn tháng"
+              />
+            </div>
+            <div className="col-md-8">
+              <Form.Control
+                type="text"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                placeholder="Tìm theo tên KPI..."
+              />
+            </div>
           </div>
         </div>
 
@@ -393,24 +408,24 @@ export default function KpiPage({ initialKpis, filters }) {
         {(tab !== "all" || monthFilter || searchKeyword) && (
           <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
             {tab !== "all" && (
-              <span className="badge-filter">
+              <span className="workspace-filter-pill">
                 Trạng thái:{" "}
-                <strong className="ms-1">
+                <strong>
                   {{ done: "Đã hoàn thành", pending: "Chưa hoàn thành", overdue: "Quá hạn" }[tab]}
                 </strong>
-                <button className="btn-close-filter" onClick={() => setTab("all")} aria-label="Xoá trạng thái">×</button>
+                <button onClick={() => setTab("all")} aria-label="Xoá trạng thái">×</button>
               </span>
             )}
             {monthFilter && (
-              <span className="badge-filter">
-                Tháng: <strong className="ms-1">{monthFilter}</strong>
-                <button className="btn-close-filter" onClick={() => setMonthFilter("")} aria-label="Xoá tháng">×</button>
+              <span className="workspace-filter-pill">
+                Tháng: <strong>{monthFilter}</strong>
+                <button onClick={() => setMonthFilter("")} aria-label="Xoá tháng">×</button>
               </span>
             )}
             {searchKeyword && (
-              <span className="badge-filter">
-                Từ khoá: <strong className="ms-1">{searchKeyword}</strong>
-                <button className="btn-close-filter" onClick={() => setSearchKeyword("")} aria-label="Xoá từ khoá">×</button>
+              <span className="workspace-filter-pill">
+                Từ khoá: <strong>{searchKeyword}</strong>
+                <button onClick={() => setSearchKeyword("")} aria-label="Xoá từ khoá">×</button>
               </span>
             )}
             <button
@@ -423,8 +438,9 @@ export default function KpiPage({ initialKpis, filters }) {
         )}
 
         {/* Table */}
-        <div className="table-responsive">
-          <Table hover className="align-middle">
+        <div className="workspace-table-shell">
+          <div className="table-responsive">
+            <Table hover className="align-middle">
             <thead className="table-light text-center thead-small">
               <tr>
                 <th className="truncate-cell" title="Tháng">Tháng</th>
@@ -487,40 +503,46 @@ export default function KpiPage({ initialKpis, filters }) {
                 ))
               )}
             </tbody>
-          </Table>
+            </Table>
+          </div>
         </div>
 
         {/* Pagination */}
-        {/* Pagination */}
         <div className="d-flex justify-content-between align-items-center mt-3">
           <span>Trang {currentPage}/{totalPages}</span>
-          <div>
-            <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0 me-2"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => p - 1)}
-              aria-label="Trang trước"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
-              </svg>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(p => p + 1)}
-              aria-label="Trang sau"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" />
-              </svg>
-            </Button>
-          </div>
+          <nav className="workspace-pagination">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  aria-label="Trang trước"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
+                  </svg>
+                </button>
+              </li>
+              <li className="page-item disabled">
+                <span className="page-link">{currentPage}/{totalPages}</span>
+              </li>
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  aria-label="Trang sau"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" />
+                  </svg>
+                </button>
+              </li>
+            </ul>
+          </nav>
         </div>
 
 

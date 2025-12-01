@@ -8,6 +8,7 @@ use App\Models\TaskTitle;
 use App\Services\MonthlyKpiAggregator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class KPIController extends Controller
 {
@@ -17,6 +18,21 @@ class KPIController extends Controller
     public function __construct(MonthlyKpiAggregator $aggregator)
     {
         $this->aggregator = $aggregator;
+    }
+
+    private function authorizeKpi(KPI $kpi): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+
+        $isOwner = $kpi->user_id === $user->id;
+        $isManager = in_array($user->role, ['Admin', 'Trưởng phòng']);
+
+        if (!$isOwner && !$isManager) {
+            abort(403, 'Bạn không có quyền thao tác KPI này');
+        }
     }
 
     /**
@@ -137,6 +153,7 @@ class KPIController extends Controller
      */
     public function show(KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $this->aggregator->recalculate($kpi);
         $tasks = $this->aggregator->breakdown($kpi);
         $overallProgress = $kpi->percent;
@@ -151,6 +168,7 @@ class KPIController extends Controller
      */
     public function edit(KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $tasks = TaskTitle::pluck('title_name');
         $selectedTasks = $kpi->tasks->pluck('task_title')->toArray();
         return view('kpis.edit', compact('kpi', 'tasks', 'selectedTasks'));
@@ -163,6 +181,7 @@ class KPIController extends Controller
      */
     public function update(Request $request, KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $data = $request->validate([
             'month'             => 'required|date_format:Y-m',
             'name'              => 'required|max:255',
@@ -225,6 +244,7 @@ class KPIController extends Controller
      */
     public function destroy(KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $kpi->delete();
         return response()->json(['message' => 'Deleted successfully']);
     }
@@ -236,6 +256,7 @@ class KPIController extends Controller
      */
     public function updateStatus(Request $request, KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $request->validate(['status' => 'required|in:Chưa hoàn thành,Đã hoàn thành']);
         $kpi->update(['status' => $request->status]);
         return response()->json(['success' => true]);
@@ -248,6 +269,7 @@ class KPIController extends Controller
      */
     public function showJson(KPI $kpi)
     {
+        $this->authorizeKpi($kpi);
         $kpi->load('tasks');
         $this->aggregator->recalculate($kpi);
 
@@ -314,4 +336,5 @@ class KPIController extends Controller
 
         return response()->json(['tasks' => $tasks]);
     }
+
 }

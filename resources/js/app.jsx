@@ -4,9 +4,15 @@ import React from 'react';
 
 import Dashboard from './pages/Dashboard';
 import TaskIndex from './pages/TaskIndex';
+import TaskCreatePage from './pages/TaskCreatePage';
 import ProfilePage from './pages/ProfilePage';
 import SummaryIndex from './pages/SummaryIndex';
 import KpiPage from './pages/KpiPage';
+import NotificationBell from './components/NotificationBell';
+import ActivityJournalPage from './pages/ActivityJournalPage';
+import ProposalsPage from './pages/ProposalsPage';
+import ManagementProposalsPage from './pages/ManagementProposalsPage';
+import ManagementKpiHealthPage from './pages/ManagementKpiHealthPage';
 
 // Import các tab quản lý
 import UsersTab from './components/management/UsersTab.jsx';
@@ -34,6 +40,16 @@ if (elTaskList) {
   const tasks = JSON.parse(elTaskList.dataset.tasks);
   createRoot(elTaskList).render(<TaskIndex tasks={tasks} />);
 }
+// Mount Task create page
+const elTaskCreate = document.getElementById('react-task-create');
+if (elTaskCreate) {
+  createRoot(elTaskCreate).render(
+    <TaskCreatePage
+      redirectUrl={elTaskCreate.dataset.redirect}
+      backUrl={elTaskCreate.dataset.back}
+    />
+  );
+}
 // Mount Profile
 const elProfile = document.getElementById('profile-app');
 if (elProfile) {
@@ -44,6 +60,14 @@ const elSummary = document.getElementById('summary-app');
 if (elSummary) {
   const root = createRoot(elSummary);
   root.render(<SummaryIndex />);
+}
+const elActivity = document.getElementById('activity-journal-app');
+if (elActivity) {
+  createRoot(elActivity).render(<ActivityJournalPage />);
+}
+const elProposals = document.getElementById('proposals-app');
+if (elProposals) {
+  createRoot(elProposals).render(<ProposalsPage />);
 }
 // Mount KPI
 const elKpi = document.getElementById('kpi-app');
@@ -70,6 +94,13 @@ if (elMgmtKpis) {
   createRoot(elMgmtKpis).render(<KpiTab />);
 }
 
+const elMgmtKpiHealth = document.getElementById('management-kpi-health-app');
+if (elMgmtKpiHealth) {
+  createRoot(elMgmtKpiHealth).render(
+    <ManagementKpiHealthPage defaultMonth={elMgmtKpiHealth.dataset.defaultMonth || ''} />
+  );
+}
+
 const elMgmtReports = document.getElementById('management-reports-app');
 if (elMgmtReports) {
   createRoot(elMgmtReports).render(<ReportsTab />);
@@ -79,3 +110,14 @@ const elMgmtAssign = document.getElementById('management-assign-app');
 if (elMgmtAssign) {
   createRoot(elMgmtAssign).render(<AssignTaskTab />);
 }
+
+const elMgmtProposals = document.getElementById('management-proposals-app');
+if (elMgmtProposals) {
+  createRoot(elMgmtProposals).render(<ManagementProposalsPage />);
+}
+
+const elSidebarNotifications = document.getElementById('sidebar-notifications-root');
+if (elSidebarNotifications) {
+  createRoot(elSidebarNotifications).render(<NotificationBell placement="sidebar" />);
+}
+

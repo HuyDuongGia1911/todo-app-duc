@@ -6,6 +6,7 @@ use App\Exports\MonthlySummariesExport;
 use App\Models\MonthlySummary;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 use App\Models\Task;
@@ -14,6 +15,7 @@ use App\Models\KPI;
 use App\Services\MonthlyReportBuilder;
 use App\Services\MonthlyKpiAggregator;
 use App\Support\KpiReportFormatter;
+use App\Models\ActivityLog;
 
 class MonthlySummaryController extends Controller
 {
@@ -52,6 +54,12 @@ class MonthlySummaryController extends Controller
             'tasks_cache' => $payload['tasks_cache'] ?? [],
             'total_tasks' => $payload['stats']['total'] ?? 0,
         ]);
+
+        [$start, $end] = $this->buildMonthRange($data['month']);
+        ActivityLog::where('user_id', Auth::id())
+            ->whereNull('synced_summary_id')
+            ->whereBetween('logged_at', [$start, $end])
+            ->update(['synced_summary_id' => $summary->id]);
 
         return response()->json($summary, 201);
     }
@@ -121,8 +129,21 @@ class MonthlySummaryController extends Controller
             return response()->json(['message' => 'Báo cáo đã chốt, không thể sửa!'], 423);
         }
 
-        $summary->update(['content' => $request->input('content')]);
-        return response()->json($summary);
+        $data = $request->validate([
+            'title' => 'nullable|string|max:255',
+            'content' => 'nullable|string',
+            'stats' => 'nullable|array',
+            'tasks_cache' => 'nullable|array',
+        ]);
+
+        $summary->fill([
+            'title' => $data['title'] ?? $summary->title,
+            'content' => $data['content'] ?? $summary->content,
+            'stats' => $data['stats'] ?? $summary->stats,
+            'tasks_cache' => $data['tasks_cache'] ?? $summary->tasks_cache,
+        ])->save();
+
+        return response()->json($summary->fresh());
     }
 
 
@@ -133,6 +154,8 @@ class MonthlySummaryController extends Controller
             return response()->json(['message' => 'Báo cáo đã chốt, không thể xoá!'], 423);
         }
 
+        ActivityLog::where('synced_summary_id', $summary->id)
+            ->update(['synced_summary_id' => null]);
         $summary->delete();
         return response()->json(['success' => true]);
     }
@@ -164,7 +187,11 @@ class MonthlySummaryController extends Controller
     private function validateData(Request $request): array
     {
         return $request->validate([
-            'month'   => 'required|date_format:Y-m',
+            'month'   => [
+                'required',
+                'date_format:Y-m',
+                Rule::unique('monthly_summaries')->where(fn($q) => $q->where('user_id', Auth::id())),
+            ],
             'title'   => 'nullable|string|max:255',
             'content' => 'nullable|string',
             'stats'   => 'nullable|array',
@@ -224,6 +251,16 @@ class MonthlySummaryController extends Controller
     }
     private function authorizeOwner(MonthlySummary $summary): void
     {
-        abort_if($summary->user_id !== Auth::id(), 403);
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+
+        $isOwner = $summary->user_id === $user->id;
+        $isManager = in_array($user->role, ['Admin', 'Trưởng phòng']);
+
+        if (!$isOwner && !$isManager) {
+            abort(403);
+        }
     }
 }

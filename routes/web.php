@@ -11,11 +11,17 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TaskAdminController;
 use App\Http\Controllers\Admin\KpiAdminController;
 use App\Http\Controllers\Admin\AssignTaskController;
+use App\Http\Controllers\Admin\KpiHealthController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\Admin\ReportAdminController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\Auth\SocialAuthController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\UserNotificationController;
+use App\Http\Controllers\TaskProposalController;
+use App\Http\Controllers\Admin\TaskProposalReviewController;
+use Illuminate\Support\Facades\View;
 // =============================
 // ✔️ AUTH routes
 // =============================
@@ -73,9 +79,38 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/summaries/{summary}/regenerate', [MonthlySummaryController::class, 'regenerate']);
     Route::get('/summaries/{summary}/export', [MonthlySummaryController::class, 'exportById']);
 
+    // Notifications page
+    Route::get('/notifications', fn() => View::make('notifications.index'))->name('notifications.index');
+
+    // Activity journal
+    Route::get('/activity', fn() => view('activity.index'))->name('activity.index');
+    Route::prefix('activity-logs')->group(function () {
+        Route::get('/', [ActivityLogController::class, 'index']);
+        Route::post('/', [ActivityLogController::class, 'store']);
+        Route::put('/{activityLog}', [ActivityLogController::class, 'update']);
+        Route::delete('/{activityLog}', [ActivityLogController::class, 'destroy']);
+    });
+
+    // Task / KPI proposals
+    Route::get('/proposals', fn() => view('proposals.index'))->name('proposals.index');
+    Route::prefix('task-proposals')->group(function () {
+        Route::get('/', [TaskProposalController::class, 'index']);
+        Route::post('/', [TaskProposalController::class, 'store']);
+        Route::get('/{taskProposal}', [TaskProposalController::class, 'show']);
+        Route::delete('/{taskProposal}', [TaskProposalController::class, 'destroy']);
+        Route::post('/{taskProposal}/mark-read', [TaskProposalController::class, 'markAsRead']);
+    });
+
     //admin
     Route::middleware(['auth', 'role:Admin,Trưởng phòng'])->group(function () {
         Route::get('/management', fn() => view('management.index'))->name('management');
+        Route::get('/management/proposals', fn() => view('management.proposals'))->name('management.proposals');
+        Route::get('/management/kpi-health', [KpiHealthController::class, 'index'])
+            ->name('management.kpi-health');
+        Route::get('/management/kpi-health/snapshot', [KpiHealthController::class, 'snapshot']);
+        Route::post('/management/kpi-health/kpis/{kpi}/reassign', [KpiHealthController::class, 'reassignKpi']);
+        Route::post('/management/kpi-health/tasks/{task}/reassign', [KpiHealthController::class, 'reassignTask']);
+        Route::post('/management/kpi-health/tasks/{task}/ping', [KpiHealthController::class, 'pingTask']);
         // ---- USERS
         Route::get('/management/users', [UserController::class, 'index']);
         Route::post('/management/users', [UserController::class, 'store']);
@@ -100,17 +135,24 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{kpi}', [KpiAdminController::class, 'update']);     // sửa
             Route::delete('/{kpi}', [KpiAdminController::class, 'destroy']); // xoá
         });
+
+        Route::prefix('management/proposals')->group(function () {
+            Route::get('/data', [TaskProposalReviewController::class, 'index']);
+            Route::post('/{taskProposal}/approve', [TaskProposalReviewController::class, 'approve']);
+            Route::post('/{taskProposal}/reject', [TaskProposalReviewController::class, 'reject']);
+        });
     });
     // ---- REPORTS (VIEW + API) -----
+    Route::middleware('role:Admin,Trưởng phòng')->group(function () {
+        // 1) View để React mount (đã có Blade <div id="management-reports-app"></div>)
+        Route::get('/management/reports', fn() => view('management.reports'))
+            ->name('management.reports');
 
-    // 1) View để React mount (đã có Blade <div id="management-reports-app"></div>)
-    Route::get('/management/reports', fn() => view('management.reports'))
-        ->name('management.reports');
-
-    // 2) API JSON cho ReportsTab
-    Route::prefix('management/reports')->group(function () {
-        Route::get('/data', [ReportAdminController::class, 'index']);          // list + filter + paginate
-        Route::post('/{report}/unlock', [ReportAdminController::class, 'unlock']); // gỡ "Chốt"
+        // 2) API JSON cho ReportsTab
+        Route::prefix('management/reports')->group(function () {
+            Route::get('/data', [ReportAdminController::class, 'index']);          // list + filter + paginate
+            Route::post('/{report}/unlock', [ReportAdminController::class, 'unlock']); // gỡ "Chốt"
+        });
     });
 
     // ===== ASSIGN (trang + API) =====
@@ -177,10 +219,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
     });
     Route::get('/dashboard/tasks-by-day', [DashboardApiController::class, 'tasksByDay']);
     Route::get('/dashboard/tasks-by-type', [DashboardApiController::class, 'tasksByType']);
+    Route::get('/dashboard/tasks', [DashboardApiController::class, 'taskList']);
     Route::get('/dashboard/kpi-progress/{id}', [DashboardApiController::class, 'kpiProgress']);
-    Route::get('/kpis', function () {
-        return \App\Models\Kpi::select('id', 'name')->get();
-    });
+    Route::get('/kpis', [DashboardApiController::class, 'kpiList']);
     Route::get('/users', function () {
         return User::select('id', 'name', 'email', 'avatar')->get();
     });
@@ -188,4 +229,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
     Route::post('/tasks/{task}/user-status', [TaskController::class, 'updateUserStatus']);
     Route::get('/tasks/latest-assignments', [TaskController::class, 'latestAssignments']);
     Route::post('/tasks/{task}/mark-read', [TaskController::class, 'markAssignmentAsRead']);
+    Route::post('/tasks/mark-all-read', [TaskController::class, 'markAllAssignmentsAsRead']);
+
+    Route::get('/notifications/feed', [UserNotificationController::class, 'index']);
+    Route::post('/notifications/{notification}/mark-read', [UserNotificationController::class, 'markAsRead']);
+    Route::post('/notifications/mark-all-read', [UserNotificationController::class, 'markAllRead']);
 });

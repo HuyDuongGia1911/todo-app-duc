@@ -11,6 +11,7 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
         shift: '',
         type: '',
         supervisor: '',
+        user_ids: [],
         detail: '',
         file_link: '',
         priority: '',
@@ -18,6 +19,8 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
     });
 
     const [attachments, setAttachments] = useState([]);
+    const [userOptions, setUserOptions] = useState([]);
+    const [userLoading, setUserLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -25,6 +28,17 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
         const { name, value } = e.target;
         setForm(prev => ({ ...prev, [name]: value }));
     };
+
+    const handleUserSelect = (userId) => {
+        setForm(prev => ({
+            ...prev,
+            user_ids: prev.user_ids.includes(userId)
+                ? prev.user_ids.filter(id => id !== userId)
+                : [...prev.user_ids, userId],
+        }));
+    };
+
+    const clearUserSelection = () => setForm(prev => ({ ...prev, user_ids: [] }));
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -76,14 +90,20 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
             };
 
             Object.entries(normalized).forEach(([key, value]) => {
-                if (value !== undefined && value !== null) {
-                    payload.append(key, value);
+                if (value === undefined || value === null) {
+                    return;
                 }
+                if (Array.isArray(value)) {
+                    return;
+                }
+                payload.append(key, value);
             });
 
             attachments.forEach(file => {
                 payload.append('attachments[]', file);
             });
+
+            form.user_ids.forEach(id => payload.append('user_ids[]', id));
 
             const res = await fetch('/tasks', {
                 method: 'POST',
@@ -102,23 +122,7 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
 
             let task = await res.json();
 
-            // 3️⃣ Nếu task vừa tạo không có người được giao (self-assign), thêm chính người đăng nhập
-            const currentUserMeta = document.querySelector('meta[name="current-user"]')?.getAttribute('content');
-            const currentUser = currentUserMeta ? JSON.parse(currentUserMeta) : null;
-
-            if (currentUser && (!task.users || task.users.length === 0)) {
-                task.users = [
-                    {
-                        id: currentUser.id,
-                        name: currentUser.name,
-                        email: currentUser.email,
-                        avatar: currentUser.avatar,
-                        pivot: { status: 'Chưa hoàn thành', progress: 0 },
-                    },
-                ];
-            }
-
-            // 4️⃣ Chuẩn hoá dữ liệu đếm để không cần reload
+            // Chuẩn hoá dữ liệu để không cần reload
             task.total_count = task.users?.length || 1;
             task.done_count = 0;
             const parsedGoal = Number(form.progress);
@@ -129,6 +133,7 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
 
             onSuccess?.(task);
             setAttachments([]);
+            clearUserSelection();
         } catch (err) {
             console.error(err);
             Swal.fire('Lỗi', 'Không thể thêm công việc', 'error');
@@ -136,6 +141,15 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
             setSubmitting(false);
         }
     };
+
+    React.useEffect(() => {
+        setUserLoading(true);
+        fetch('/api/users')
+            .then(res => res.json())
+            .then(data => setUserOptions(data))
+            .catch(() => setUserOptions([]))
+            .finally(() => setUserLoading(false));
+    }, []);
 
 
 
@@ -224,6 +238,41 @@ export default function TaskAddForm({ onSuccess, onCancel }) {
                             onChange={handleChange}
                             creatable
                         />
+                    </Form.Group>
+                </Col>
+
+                <Col md={12}>
+                    <Form.Group className="input-wrapper">
+                        <Form.Label className="label-inside">Người được giao</Form.Label>
+                        <div className="dashboard-task-list">
+                            {userLoading && <p className="text-muted mb-0">Đang tải danh sách...</p>}
+                            {!userLoading && userOptions.length === 0 && (
+                                <p className="text-muted mb-0">Chưa có nhân viên nào.</p>
+                            )}
+                            {!userLoading && userOptions.length > 0 && (
+                                <div className="assignee-multi-select">
+                                    {userOptions.map(user => {
+                                        const checked = form.user_ids.includes(user.id);
+                                        const avatar = user.avatar ? (user.avatar.startsWith('http') ? user.avatar : `/storage/${user.avatar}`) : 'https://www.w3schools.com/howto/img_avatar.png';
+                                        return (
+                                            <label key={user.id} className={`assignee-chip ${checked ? 'is-selected' : ''}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="d-none"
+                                                    checked={checked}
+                                                    onChange={() => handleUserSelect(user.id)}
+                                                />
+                                                <span className="assignee-chip__avatar">
+                                                    <img src={avatar} alt={user.name} />
+                                                </span>
+                                                <span className="assignee-chip__label">{user.name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <small className="text-muted">Có thể chọn nhiều người; nếu bỏ trống hệ thống sẽ gán bạn sau khi lưu.</small>
+                        </div>
                     </Form.Group>
                 </Col>
 

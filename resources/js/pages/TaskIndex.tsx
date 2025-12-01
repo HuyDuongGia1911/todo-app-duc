@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Table } from 'react-bootstrap';
 import { FaPlus } from 'react-icons/fa';
 import Select, { SingleValue } from 'react-select';
@@ -13,7 +13,6 @@ import Modal from '../components/Modal'
 import ExportModal from '../components/ExportModal';
 import { Dropdown } from 'react-bootstrap';
 import { FaDownload, FaTrash } from 'react-icons/fa';
-import NotificationBell from '../components/NotificationBell';
 
 type OptionType = { value: string; label: string };
 
@@ -43,6 +42,7 @@ interface Task {
   done_count?: number;   // số người hoàn thành
   total_count?: number;  // tổng số người nhận
   users?: any[];
+  my_status?: 'Đã hoàn thành' | 'Chưa hoàn thành' | null;
 }
 
 interface User {
@@ -57,7 +57,66 @@ interface Props {
 }
 
 export default function TaskIndex({ tasks }: Props) {
-  const [taskList, setTaskList] = useState<Task[]>(tasks);
+  const currentUserMeta = document.querySelector('meta[name="current-user"]')?.getAttribute('content') || '';
+  let currentUserId: number | null = null;
+  let currentUserName = 'admin';
+
+  try {
+    if (currentUserMeta) {
+      const parsed = JSON.parse(currentUserMeta);
+      currentUserId = parsed?.id ?? null;
+      currentUserName = parsed?.name ?? 'admin';
+    }
+  } catch (error) {
+    console.warn('Không thể parse thông tin người dùng hiện tại', error);
+  }
+
+  const normalizeTasks = (list: Task[]): Task[] =>
+    list.map(t => {
+      const hasUsers = Array.isArray(t.users) && t.users.length > 0;
+      const supervisorName = t.supervisor?.trim().toLowerCase();
+      const currentName = currentUserName?.trim().toLowerCase();
+      const selfAssigned = !hasUsers && supervisorName && currentName && supervisorName === currentName;
+
+      const fallbackUserId = currentUserId ?? 0;
+      const usersArray = hasUsers
+        ? t.users
+        : selfAssigned
+          ? [{ id: fallbackUserId, name: t.supervisor, pivot: { status: t.status } }]
+          : [];
+
+      const total = usersArray.length;
+      const done = usersArray.filter((u: any) => u.pivot?.status === 'Đã hoàn thành').length;
+
+      const goal = t.task_goal ?? (total || 1);
+      const progress = hasUsers || total > 0
+        ? t.progress ?? 0
+        : t.status === 'Đã hoàn thành'
+          ? 100
+          : 0;
+
+      const myPivotStatus = currentUserId
+        ? usersArray.find((u: any) => u.id === currentUserId)?.pivot?.status ?? null
+        : selfAssigned
+          ? t.status
+          : null;
+
+      return {
+        ...t,
+        users: usersArray,
+        files: Array.isArray(t.files) ? t.files : [],
+        total_count: total,
+        done_count: done,
+        task_goal: goal,
+        progress,
+        my_status: myPivotStatus ?? t.my_status ?? (selfAssigned ? t.status : null),
+      };
+    });
+
+  const getStatusForMe = (task: Task) => task.my_status ?? task.status;
+  const isTaskDoneForMe = (task: Task) => getStatusForMe(task) === 'Đã hoàn thành';
+
+  const [taskList, setTaskList] = useState<Task[]>(() => normalizeTasks(tasks));
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isEditingMode, setIsEditingMode] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,9 +133,22 @@ export default function TaskIndex({ tasks }: Props) {
     const id = params.get('highlight_task');
     return id ? Number(id) : null;
   });
-  const currentUserName = (document.querySelector('meta[name="current-user"]')?.getAttribute('content')) || 'admin';
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const itemsPerPage = 7;
+  const taskStats = useMemo(() => {
+    const total = taskList.length;
+    const done = taskList.filter(isTaskDoneForMe).length;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const overdue = taskList.filter(task => {
+      const deadline = new Date(task.deadline_at || task.task_date);
+      deadline.setHours(0, 0, 0, 0);
+      return !isTaskDoneForMe(task) && deadline < now;
+    }).length;
+    const inProgress = Math.max(total - done, 0);
+    const upcoming = Math.max(inProgress - overdue, 0);
+    return { total, done, overdue, upcoming };
+  }, [taskList]);
 // duc
   useEffect(() => {
     setCurrentPage(1);
@@ -89,55 +161,7 @@ export default function TaskIndex({ tasks }: Props) {
       .catch(err => console.error('Lỗi tải danh sách user', err));
   }, []);
   useEffect(() => {
-    // 🧩 Lấy tên người hiện tại (từ meta tag hoặc mặc định 'admin')
-    const currentUserName =
-      document.querySelector('meta[name="current-user"]')?.getAttribute('content') || 'admin';
-
-    const normalize = (list: Task[]): Task[] =>
-      list.map(t => {
-        const hasUsers = Array.isArray(t.users) && t.users.length > 0;
-
-        // ⚙️ Nếu không có users nhưng supervisor = người hiện tại → tự giao cho chính mình
-        const selfAssigned =
-          !hasUsers &&
-          t.supervisor?.trim().toLowerCase() === currentUserName.trim().toLowerCase();
-
-        // 🧠 Xác định danh sách người được giao
-        const usersArray = hasUsers
-          ? t.users
-          : selfAssigned
-            ? [{ id: 0, name: t.supervisor, pivot: { status: t.status } }]
-            : [];
-
-        // 🧮 Tính tổng & đã hoàn thành
-        const total = usersArray.length;
-        const done = usersArray.filter(
-          (u: any) => u.pivot?.status === 'Đã hoàn thành'
-        ).length;
-
-        // 🎯 Mục tiêu (nếu chưa có, dùng tổng số người)
-        const goal = t.task_goal ?? (total || 1);
-
-        // 🔢 Nếu người tự giao thì tính tiến độ theo trạng thái của task
-        const progress =
-          hasUsers || total > 0
-            ? t.progress ?? 0
-            : t.status === 'Đã hoàn thành'
-              ? 100
-              : 0;
-
-        return {
-          ...t,
-          users: usersArray,
-          files: Array.isArray(t.files) ? t.files : [],
-          total_count: total,
-          done_count: done,
-          task_goal: goal,
-          progress,
-        };
-      });
-
-    setTaskList(normalize(tasks));
+    setTaskList(normalizeTasks(tasks));
   }, [tasks]);
 
 
@@ -157,9 +181,12 @@ export default function TaskIndex({ tasks }: Props) {
       taskDeadline.setHours(0, 0, 0, 0);
 
       // Bộ lọc theo tab
-      if (tab === 'done' && task.status !== 'Đã hoàn thành') return false;
-      if (tab === 'pending' && (task.status !== 'Chưa hoàn thành' || taskDeadline < today)) return false;
-      if (tab === 'overdue' && (task.status !== 'Chưa hoàn thành' || taskDeadline >= today)) { console.log(taskDeadline, today); return false; }
+      const isDoneForMe = isTaskDoneForMe(task);
+      if (tab === 'done' && !isDoneForMe) return false;
+      if (tab === 'pending' && (isDoneForMe || taskDeadline < today)) return false;
+      if (tab === 'overdue' && (isDoneForMe || taskDeadline >= today)) {
+        return false;
+      }
 
 
       // Bộ lọc ưu tiên
@@ -234,7 +261,7 @@ export default function TaskIndex({ tasks }: Props) {
   }, [highlightTaskId, currentTasks]);
 
   const handleToggle = async (task: Task) => {
-    const newStatus = task.status === 'Đã hoàn thành' ? 'Chưa hoàn thành' : 'Đã hoàn thành';
+    const newStatus = isTaskDoneForMe(task) ? 'Chưa hoàn thành' : 'Đã hoàn thành';
     try {
       const res = await fetch(`/tasks/${task.id}/user-status`, {
         method: 'POST',
@@ -248,18 +275,18 @@ export default function TaskIndex({ tasks }: Props) {
       if (!res.ok) throw new Error('Cập nhật trạng thái thất bại');
       const data = await res.json();
 
-      // ✅ Cập nhật riêng tiến độ & trạng thái hiển thị
       setTaskList(prev =>
         prev.map(t =>
           t.id === task.id
             ? {
-              ...t,
-              status: data.my_status,
-              progress: t.progress, // % cá nhân
-              total_count: data.total_count ?? t.total_count,
-              done_count: data.done_count ?? t.done_count,
-              task_goal: t.task_goal ?? data.total_count ?? t.total_count ?? 1,
-            }
+                ...t,
+                status: data.task_status ?? t.status,
+                my_status: data.my_status ?? newStatus,
+                progress: t.progress,
+                total_count: data.total_count ?? t.total_count,
+                done_count: data.done_count ?? t.done_count,
+                task_goal: t.task_goal ?? data.total_count ?? t.total_count ?? 1,
+              }
             : t
         )
       );
@@ -362,40 +389,39 @@ export default function TaskIndex({ tasks }: Props) {
   return (
 
     <>
-      {/* Heading và nút thêm công việc */}
-      <div className="d-flex justify-content-between align-items-center mb-4 w-100">
-        <div className="d-flex flex-column">
-          <h2 className="fw-bold mb-1">Danh sách công việc</h2>
-          <div className="d-flex align-items-center text-muted">
-            <Icon size={20} className="me-2" />
-            <span className="fw-semibold">{session}, {weekday} {date}</span>
+      <section className="workspace-hero mb-4">
+        <div>
+          <p className="workspace-hero__eyebrow">Media Workflow</p>
+          <h2 className="workspace-hero__title">Danh sách công việc</h2>
+          <p className="workspace-hero__subtitle">
+            Theo dõi tiến độ chiến dịch theo thời gian thực và cộng tác cùng team truyền thông.
+          </p>
+          <div className="workspace-hero__info">
+            <Icon size={18} />
+            <span>{session}, {weekday} {date}</span>
+          </div>
+
+          <div className="workspace-metrics">
+            {[{ label: 'Tổng việc', value: taskStats.total }, { label: 'Hoàn thành', value: taskStats.done }, { label: 'Sắp đến hạn', value: taskStats.upcoming }, { label: 'Quá hạn', value: taskStats.overdue }].map(metric => (
+              <div className="workspace-metric-card" key={metric.label}>
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div className="d-flex align-items-center gap-3">
-          <NotificationBell />
-          <Button
-            variant="outline-secondary"
-            className="rounded-3 py-2 px-3"
-            onClick={() => setShowExportModal(true)}
-          >
-            <FaDownload className="me-2" />
-            Export
-          </Button>
-          <Button
-            variant="dark"
-            className="d-flex align-items-center gap-2 rounded-3 py-2 px-3"
-            onClick={() => setShowAddModal(true)}
-          >
-            <FaPlus />
-            Thêm công việc
-          </Button>
+        <div className="workspace-hero__actions">
+          <button className="btn btn-outline-light rounded-4 px-4" onClick={() => setShowExportModal(true)}>
+            <FaDownload className="me-2" /> Xuất báo cáo
+          </button>
+          <button className="glow-button" onClick={() => setShowAddModal(true)}>
+            <FaPlus /> Thêm công việc
+          </button>
         </div>
-      </div>
+      </section>
 
-
-
-      <div className="card shadow-sm rounded-4 p-4 bg-white tasks-board-card">
+      <div className="workspace-card tasks-board-card">
 
         {/* {editingTask && (
         <SidebarEditTask
@@ -412,8 +438,14 @@ export default function TaskIndex({ tasks }: Props) {
         <div className="task-tabs d-flex gap-4 mb-4">
           {[
             { key: 'all', label: 'Tất cả', count: taskList.length, color: 'dark' },
-            { key: 'done', label: 'Đã hoàn thành', color: 'green', count: taskList.filter(t => t.status === 'Đã hoàn thành').length },
-            { key: 'pending', label: 'Chưa hoàn thành', color: 'orange', count: taskList.filter(t => t.status === 'Chưa hoàn thành' && new Date(t.deadline_at || t.task_date) >= new Date()).length },
+            { key: 'done', label: 'Đã hoàn thành', color: 'green', count: taskList.filter(isTaskDoneForMe).length },
+            { key: 'pending', label: 'Chưa hoàn thành', color: 'orange', count: taskList.filter(t => {
+              const deadline = new Date(t.deadline_at || t.task_date);
+              const today = new Date();
+              deadline.setHours(0,0,0,0);
+              today.setHours(0,0,0,0);
+              return !isTaskDoneForMe(t) && deadline >= today;
+            }).length },
             {
               key: 'overdue',
               label: 'Quá hạn',
@@ -424,7 +456,7 @@ export default function TaskIndex({ tasks }: Props) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
 
-                return t.status === 'Chưa hoàn thành' && taskDeadline < today;
+                return !isTaskDoneForMe(t) && taskDeadline < today;
               }).length,
             }
 
@@ -442,42 +474,34 @@ export default function TaskIndex({ tasks }: Props) {
         </div>
 
         {/* Filters */}
-        <div className="row align-items-center mb-3">
-          <div className="col-md-3">
-            <Select
-              isClearable
-              value={priorityFilter}
-              onChange={setPriorityFilter}
-              options={['Khẩn cấp', 'Cao', 'Trung bình', 'Thấp'].map(p => ({ value: p, label: p }))}
-              placeholder="Độ ưu tiên"
-            />
-          </div>
-          <div className="col-md-3">
-            <Form.Control type="date" value={taskDateStart} onChange={e => setTaskDateStart(e.target.value)} />
-          </div>
-          <div className="col-md-3">
-            <Form.Control type="date" value={taskDateEnd} onChange={e => setTaskDateEnd(e.target.value)} />
-          </div>
-          <div className="col-md-3 text-end">
-            <Form onSubmit={e => e.preventDefault()}>
-              <div className="d-flex">
-                <Form.Control
-                  type="text"
-                  value={searchKeyword}
-                  onChange={e => {
-                    setSearchKeyword(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Tìm công việc..."
-                />
-
-
-
-
-
-              </div>
-            </Form>
-
+        <div className="workspace-filters mb-3">
+          <div className="row g-3 w-100">
+            <div className="col-md-3">
+              <Select
+                isClearable
+                value={priorityFilter}
+                onChange={setPriorityFilter}
+                options={['Khẩn cấp', 'Cao', 'Trung bình', 'Thấp'].map(p => ({ value: p, label: p }))}
+                placeholder="Độ ưu tiên"
+              />
+            </div>
+            <div className="col-md-3">
+              <Form.Control type="date" value={taskDateStart} onChange={e => setTaskDateStart(e.target.value)} />
+            </div>
+            <div className="col-md-3">
+              <Form.Control type="date" value={taskDateEnd} onChange={e => setTaskDateEnd(e.target.value)} />
+            </div>
+            <div className="col-md-3">
+              <Form.Control
+                type="text"
+                value={searchKeyword}
+                onChange={e => {
+                  setSearchKeyword(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Tìm công việc..."
+              />
+            </div>
           </div>
         </div>
         {(tab !== 'all' || priorityFilter || taskDateStart || taskDateEnd || searchKeyword) && (
@@ -496,84 +520,44 @@ export default function TaskIndex({ tasks }: Props) {
 
             {/* Trạng thái */}
             {tab !== 'all' && (
-              <span className="badge-filter">
-                Trạng thái: <strong className="ms-1">{{
+              <span className="workspace-filter-pill">
+                Trạng thái: <strong>{{
                   done: 'Đã hoàn thành',
                   pending: 'Chưa hoàn thành',
                   overdue: 'Quá hạn',
                 }[tab]}</strong>
-                <button
-                  onClick={() => setTab('all')}
-                  className="btn-close-filter"
-                  aria-label="Xoá trạng thái"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
+                <button onClick={() => setTab('all')} aria-label="Xoá trạng thái">×</button>
               </span>
             )}
 
             {/* Ưu tiên */}
             {priorityFilter && (
-              <span className="badge-filter">
-                Ưu tiên: <strong className="ms-1">{priorityFilter.label}</strong>
-                <button
-                  onClick={() => setPriorityFilter(null)}
-                  className="btn-close-filter"
-                  aria-label="Xoá ưu tiên"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
+              <span className="workspace-filter-pill">
+                Ưu tiên: <strong>{priorityFilter.label}</strong>
+                <button onClick={() => setPriorityFilter(null)} aria-label="Xoá ưu tiên">×</button>
               </span>
             )}
 
             {/* Từ ngày */}
             {taskDateStart && (
-              <span className="badge-filter">
-                Từ ngày: <strong className="ms-1">{taskDateStart}</strong>
-                <button
-                  onClick={() => setTaskDateStart('')}
-                  className="btn-close-filter"
-                  aria-label="Xoá từ ngày"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
+              <span className="workspace-filter-pill">
+                Từ ngày: <strong>{taskDateStart}</strong>
+                <button onClick={() => setTaskDateStart('')} aria-label="Xoá từ ngày">×</button>
               </span>
             )}
 
             {/* Đến ngày */}
             {taskDateEnd && (
-              <span className="badge-filter">
-                Đến ngày: <strong className="ms-1">{taskDateEnd}</strong>
-                <button
-                  onClick={() => setTaskDateEnd('')}
-                  className="btn-close-filter"
-                  aria-label="Xoá đến ngày"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
+              <span className="workspace-filter-pill">
+                Đến ngày: <strong>{taskDateEnd}</strong>
+                <button onClick={() => setTaskDateEnd('')} aria-label="Xoá đến ngày">×</button>
               </span>
             )}
             {/* Từ khoá */}
             {searchKeyword && (
-              <span className="badge-filter">
-                Từ khoá: <strong className="ms-1">{searchKeyword}</strong>
-                <button
-                  onClick={() => setSearchKeyword('')}
-                  className="btn-close-filter"
-                  aria-label="Xoá từ khoá"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
+              <span className="workspace-filter-pill">
+                Từ khoá: <strong>{searchKeyword}</strong>
+                <button onClick={() => setSearchKeyword('')} aria-label="Xoá từ khoá">×</button>
               </span>
             )}
             {/* Nút clear all */}
@@ -610,8 +594,9 @@ export default function TaskIndex({ tasks }: Props) {
         )}
 
         {/* Table */}
-        <div className="table-responsive task-table-wrapper">
-          <Table hover className="align-middle task-table">
+        <div className="workspace-table-shell">
+          <div className="table-responsive task-table-wrapper">
+            <Table hover className="align-middle task-table">
             <thead className="table-light text-center thead-small">
               <tr>
                 <th className="truncate-cell" title="Ngày">Ngày</th>
@@ -641,10 +626,10 @@ export default function TaskIndex({ tasks }: Props) {
                 const avatar = user?.avatar ? `/storage/${user.avatar}` : 'https://www.w3schools.com/howto/img_avatar.png';
 
                 return (
-                  <tr
+                    <tr
                     key={task.id}
                     id={`task-row-${task.id}`}
-                    className={`task-row ${task.status === 'Đã hoàn thành' ? 'task-done-row task-row-done' : ''}`}
+                    className={`task-row ${isTaskDoneForMe(task) ? 'task-done-row task-row-done' : ''}`}
                   >
                     <td className="text-center truncate-cell" title={formatDate(task.task_date)}>{formatDate(task.task_date)}</td>
                     <td className="text-center truncate-cell" title={formatDate(task.deadline_at)}>
@@ -758,7 +743,7 @@ export default function TaskIndex({ tasks }: Props) {
                         : (!task.files || task.files.length === 0 ? '-' : null)}
                     </td>
                     <td className="text-center">
-                      <Form.Check type="switch" id={`task-${task.id}`} checked={task.status === 'Đã hoàn thành'} onChange={() => handleToggle(task)} />
+                      <Form.Check type="switch" id={`task-${task.id}`} checked={isTaskDoneForMe(task)} onChange={() => handleToggle(task)} />
                     </td>
 
                     <td className="text-center">
@@ -811,40 +796,46 @@ export default function TaskIndex({ tasks }: Props) {
               })}
             </tbody>
 
-          </Table>
+            </Table>
+          </div>
         </div>
 
         {/* Pagination */}
         <div className="d-flex justify-content-between align-items-center mt-3">
-          <span>Trang {currentPage}/{totalPages}</span>
-          <div>
-            <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0 me-2"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => p - 1)}
-              aria-label="Trang trước"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
-              </svg>
-            </Button>
-
-            <Button
-              size="sm"
-              variant="link"
-              className="text-secondary p-0"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(p => p + 1)}
-              aria-label="Trang sau"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" />
-              </svg>
-            </Button>
-
-          </div>
+          <span>Trang {currentPage}/{totalPages || 1}</span>
+          <nav className="workspace-pagination">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  aria-label="Trang trước"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fillRule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" />
+                  </svg>
+                </button>
+              </li>
+              <li className="page-item disabled">
+                <span className="page-link">{currentPage}/{totalPages || 1}</span>
+              </li>
+              <li className={`page-item ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages || 1, p + 1))}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  aria-label="Trang sau"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path fillRule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" />
+                  </svg>
+                </button>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
       {showAddModal && (
@@ -855,7 +846,8 @@ export default function TaskIndex({ tasks }: Props) {
           <TaskAddForm
             onCancel={() => setShowAddModal(false)}
             onSuccess={(newTask) => {
-              setTaskList(prev => [newTask, ...prev]);
+              const normalized = normalizeTasks([newTask])[0];
+              setTaskList(prev => [normalized, ...prev]);
               setShowAddModal(false);
             }}
           />
@@ -879,7 +871,8 @@ export default function TaskIndex({ tasks }: Props) {
           }}
           onModeChange={setIsEditingMode}
           onSuccess={(updatedTask) => {
-            setTaskList(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+            const normalized = normalizeTasks([updatedTask])[0];
+            setTaskList(prev => prev.map(t => t.id === normalized.id ? normalized : t));
             setEditingTask(null);
             setIsEditingMode(false);
           }}

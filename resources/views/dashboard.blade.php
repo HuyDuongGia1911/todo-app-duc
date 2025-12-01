@@ -9,7 +9,4 @@
   data-taskcount="{{ $taskCount }}"
   data-dashboard="{{ json_encode($dashboardData) }}">
 </div>
-
-     @viteReactRefresh
-   @vite('resources/js/app.jsx')
 @endsection

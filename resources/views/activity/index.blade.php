@@ -2,7 +2,6 @@
 
 @section('content')
 <div class="container">
-  
-    <div id="summary-app"></div> {{-- React mount tại đây --}}
+    <div id="activity-journal-app"></div>
 </div>
 @endsection

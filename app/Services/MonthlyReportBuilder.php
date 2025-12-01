@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\KPI;
 use App\Models\Task;
 use App\Services\MonthlyKpiAggregator;
@@ -28,6 +29,7 @@ class MonthlyReportBuilder
         $taskCache = $this->buildTaskCache($tasks);
 
         $kpis = $this->collectKpis($userId, $start, $end);
+        $activityLogs = $this->collectActivityLogs($userId, $start, $end);
         $highlights = $this->pickHighlights($tasks);
         $issues = $this->buildIssues($taskStats, $kpis);
         $recommendations = $this->buildRecommendations($taskStats, $issues);
@@ -40,7 +42,8 @@ class MonthlyReportBuilder
             $kpis,
             $highlights,
             $issues,
-            $recommendations
+            $recommendations,
+            $activityLogs
         );
 
         return [
@@ -53,9 +56,32 @@ class MonthlyReportBuilder
                 'issues' => $issues,
                 'recommendations' => $recommendations,
                 'kpis' => $kpis,
+                'activity_logs' => $activityLogs,
             ],
+            'activity_logs' => $activityLogs,
         ];
     }
+    protected function collectActivityLogs(int $userId, Carbon $start, Carbon $end): array
+    {
+        return ActivityLog::query()
+            ->where('user_id', $userId)
+            ->whereBetween('logged_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->orderBy('logged_at')
+            ->orderBy('id')
+            ->get()
+            ->map(function (ActivityLog $log) {
+                return [
+                    'id' => $log->id,
+                    'title' => $log->title,
+                    'content' => $log->content,
+                    'tags' => $log->tags ?? [],
+                    'logged_at' => optional($log->logged_at)->toDateTimeString(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
 
     /**
      * Lấy task user sở hữu hoặc được assign trong tháng.
@@ -237,7 +263,8 @@ class MonthlyReportBuilder
         array $kpis,
         array $highlights,
         array $issues,
-        array $recommendations
+        array $recommendations,
+        array $activityLogs
     ): string {
         $overview = [
             sprintf('- Tổng số công việc: %d', $stats['total'] ?? 0),
@@ -267,6 +294,9 @@ class MonthlyReportBuilder
             '5. Kiến nghị / Đề xuất' => $recommendations,
         ];
 
+        $logSection = $this->formatActivityLogSection($activityLogs);
+        $contentSections['6. Nhật ký hoạt động'] = $logSection;
+
         $lines = [];
         foreach ($contentSections as $title => $details) {
             $lines[] = $title;
@@ -277,5 +307,20 @@ class MonthlyReportBuilder
         }
 
         return trim(implode("\n", $lines));
+    }
+
+    protected function formatActivityLogSection(array $logs): array
+    {
+        if (empty($logs)) {
+            return ['- Chưa có ghi chép nào được lưu trong tháng.'];
+        }
+
+        return array_map(function (array $log) {
+            $timestamp = isset($log['logged_at'])
+                ? Carbon::parse($log['logged_at'])->format('d/m')
+                : '--/--';
+            $detail = $log['content'] ?? '';
+            return sprintf('- [%s] %s%s', $timestamp, $log['title'], $detail ? ": {$detail}" : '');
+        }, $logs);
     }
 }

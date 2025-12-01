@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Task;
+use App\Models\KPI;
 use App\Services\MonthlyKpiAggregator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DashboardApiController extends Controller
 {
@@ -69,6 +71,65 @@ class DashboardApiController extends Controller
 
         return response()->json($data);
     }
+
+    public function taskList(Request $request)
+    {
+        $userId = Auth::id();
+        $today = Carbon::today();
+        $filter = $request->query('filter', 'today');
+
+        $query = $this->queryForUser($userId)
+            ->orderByDesc('task_date')
+            ->orderByDesc('deadline_at');
+
+        if ($filter === 'today') {
+            $query->whereDate('task_date', $today);
+        } elseif ($filter === 'week') {
+            $query->whereBetween('task_date', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()]);
+        } elseif ($filter === 'tasksSoon') {
+            $query->where('status', '!=', 'Đã hoàn thành')
+                ->whereBetween(
+                    DB::raw('COALESCE(deadline_at, task_date)'),
+                    [$today->toDateString(), $today->copy()->addDays(7)->toDateString()]
+                );
+        } else { // overdue filter
+            $monthStart = $today->copy()->startOfMonth();
+            $monthEnd = $today->copy()->endOfMonth();
+            $query->where('status', '!=', 'Đã hoàn thành')
+                ->whereBetween(DB::raw('COALESCE(deadline_at, task_date)'), [$monthStart->toDateString(), $monthEnd->toDateString()])
+                ->whereDate(DB::raw('COALESCE(deadline_at, task_date)'), '<', $today);
+        }
+
+        $formatDate = function ($value) {
+            if (empty($value)) {
+                return null;
+            }
+
+            try {
+                return Carbon::parse($value)->toDateString();
+            } catch (\Throwable $e) {
+                return $value;
+            }
+        };
+
+        $tasks = $query->take(50)->get()->map(function (Task $task) use ($formatDate) {
+            return [
+                'id' => $task->id,
+                'title' => $task->title ?? '(Không tên)',
+                'status' => $task->status,
+                'priority' => $task->priority,
+                'task_date' => $formatDate($task->task_date),
+                'deadline_at' => $formatDate($task->deadline_at),
+                'url' => route('tasks.edit', $task),
+            ];
+        });
+
+        return response()->json([
+            'filter' => $filter,
+            'tasks' => $tasks,
+        ]);
+    }
+
 // public function kpiProgress($id)
 // {
 //     $kpi = \App\Models\Kpi::with('tasks')->findOrFail($id);
@@ -147,6 +208,17 @@ public function kpiProgress($id)
 
     return response()->json($data);
 }
+
+    public function kpiList()
+    {
+        $userId = Auth::id();
+
+        $kpis = KPI::where('user_id', $userId)
+            ->orderByDesc('start_date')
+            ->get(['id', 'name', 'start_date', 'end_date']);
+
+        return response()->json($kpis);
+    }
 
 
 

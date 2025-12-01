@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Modal from '../Modal';
 
 const normalizeNumber = (value) => {
@@ -25,6 +25,28 @@ const evaluatePercent = (value) => {
 export default function SummaryDetailModal({ summary, onClose, onSaveContent, onRegenerate, isOpen }) {
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(summary.content || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setContent(summary.content || '');
+  }, [summary.id, summary.content]);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [summary.id]);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await onSaveContent(summary.id, content);
+      setEditing(false);
+    } catch (error) {
+      console.error('Không thể lưu tổng kết', error);
+      alert('Không thể lưu nội dung tổng kết!');
+    } finally {
+      setSaving(false);
+    }
+  };
   const handleExportExcel = () => {
     // Xuất theo ID của summary hiện tại
     window.open(`/summaries/${summary.id}/export`, '_blank');
@@ -41,9 +63,10 @@ export default function SummaryDetailModal({ summary, onClose, onSaveContent, on
             <>
               <button
                 className="btn btn-success"
-                onClick={() => onSaveContent(summary.id, content)}
+                onClick={handleSave}
+                disabled={saving}
               >
-                Lưu
+                {saving ? 'Đang lưu…' : 'Lưu'}
               </button>
               <button className="btn btn-secondary" onClick={() => setEditing(false)}>
                 Hủy

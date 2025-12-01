@@ -23,6 +23,17 @@ type ReportItem = {
   locked?: boolean | number | "0" | "1";
 };
 
+type SummaryDetail = {
+  id: number;
+  month: string;
+  title: string;
+  content: string;
+  locked_at: string | null;
+  tasks_cache: any[];
+  stats: any;
+  kpis: any[];
+};
+
 export default function ReportsTab() {
   // filters
   const [keyword, setKeyword] = useState("");
@@ -38,7 +49,7 @@ export default function ReportsTab() {
   const [items, setItems] = useState<ReportItem[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
 const [detailLoading, setDetailLoading] = useState(false);
-const [detailSummary, setDetailSummary] = useState<any | null>(null);
+const [detailSummary, setDetailSummary] = useState<SummaryDetail | null>(null);
   const [meta, setMeta] = useState({
     current_page: 1,
     last_page: 1,
@@ -121,7 +132,7 @@ const [detailSummary, setDetailSummary] = useState<any | null>(null);
     const raw = res.data || {};
 
     // (Không bắt buộc) Chuẩn hoá 1 chút để hợp modal:
-    const mapped = {
+    const mapped: SummaryDetail = {
       id: raw.id,
       month: raw.month,
       title: raw.title,
@@ -498,8 +509,14 @@ const [detailSummary, setDetailSummary] = useState<any | null>(null);
       setDetailSummary(null);
     }}
     onSaveContent={async (id: number, content: string) => {
-      // TODO: gọi API lưu nếu có
-      setDetailSummary((prev) => (prev ? { ...prev, content } : prev));
+      try {
+        const res = await axios.put(`/summaries/${id}`, { content });
+        const nextContent = res.data?.content ?? content;
+        setDetailSummary((prev) => (prev ? { ...prev, content: nextContent } : prev));
+      } catch (error) {
+        console.error('Không thể lưu báo cáo', error);
+        throw error;
+      }
     }}
     onRegenerate={async () => {
       if (!detailSummary) return;
