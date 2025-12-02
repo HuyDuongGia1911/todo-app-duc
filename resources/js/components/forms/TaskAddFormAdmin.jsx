@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Form, Button, Row, Col } from 'react-bootstrap';
 import Swal from 'sweetalert2';
 import AsyncDropdownSelect from '../AsyncDropdownSelect';
@@ -15,8 +15,8 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
     file_link: '',
     priority: '',
     progress: '',
-    user_id: '',     // Người dùng
-    assigned_by: '', // Người giao
+    user_ids: [],
+    assigned_by: '',
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -38,8 +38,8 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
       Swal.fire('Thiếu thông tin', 'Vui lòng chọn độ ưu tiên!', 'warning');
       return;
     }
-    if (!form.user_id) {
-      Swal.fire('Thiếu thông tin', 'Vui lòng chọn Người dùng!', 'warning');
+    if (!form.user_ids.length) {
+      Swal.fire('Thiếu thông tin', 'Vui lòng chọn ít nhất một người nhận!', 'warning');
       return;
     }
     if (!form.assigned_by) {
@@ -80,8 +80,15 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
       }
 
       // 2) Tạo qua endpoint Admin
+      const userIds = form.user_ids
+        .map(value => Number(value))
+        .filter(id => !Number.isNaN(id));
+
       const payload = {
         ...form,
+        user_ids: userIds,
+        user_id: userIds[0] ?? null,
+        assigned_by: form.assigned_by ? Number(form.assigned_by) : null,
         status: 'Chưa hoàn thành',
         deadline_at: form.deadline_at || form.task_date,
         progress:
@@ -267,24 +274,26 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
         </Col>
 
         {/* ✅ MỚI: Người dùng (assignee) – dùng AsyncDropdownSelect với users */}
-        <Col md={6}>
+        <Col md={12}>
           <Form.Group className="input-wrapper">
-            <Form.Label className="label-inside">Người dùng</Form.Label>
+            <Form.Label className="label-inside">Người nhận</Form.Label>
             <AsyncDropdownSelect
-              name="user_id"
+              name="user_ids"
               label=""
               api="/api/users"
-              field="name"       // label mặc định
-              valueKey="id"      // ✅ giá trị submit = id
-              labelKey="name"    // nhãn hiển thị = name
-              value={form.user_id}
-              onChange={handleChange}
-              creatable={false}  // không cho tạo user
+              field="name"
+              valueKey="id"
+              labelKey="name"
+              multiple
+              value={form.user_ids}
+              onChange={(values) => setForm(prev => ({ ...prev, user_ids: values }))}
+              creatable={false}
             />
           </Form.Group>
+          <small className="text-muted">* Có thể chọn nhiều người nhận, hệ thống vẫn lưu người đầu tiên vào trường kế thừa.</small>
         </Col>
 
-        {/* ✅ MỚI: Người giao (assigner) – dùng AsyncDropdownSelect với users */}
+        {/* Người giao */}
         <Col md={6}>
           <Form.Group className="input-wrapper">
             <Form.Label className="label-inside">Người giao</Form.Label>

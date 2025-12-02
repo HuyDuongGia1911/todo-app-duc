@@ -5,6 +5,7 @@ import TasksTab from '../components/management/TasksTab';
 import KpiTab from '../components/management/KpiTab';
 import ReportsTab from '../components/management/ReportsTab';
 import AssignTaskTab from '../components/management/AssignTaskTab';
+import ApprovalCenterTab from '../components/management/ApprovalCenterTab';
 
 function ManagementIndex() {
   const [tab, setTab] = useState('users');
@@ -16,6 +17,7 @@ function ManagementIndex() {
       case 'kpis': return <KpiTab />;
       case 'reports': return <ReportsTab />;
       case 'assign': return <AssignTaskTab />;
+      case 'approval': return <ApprovalCenterTab />;
       default: return <UsersTab />;
     }
   };
@@ -37,6 +39,9 @@ function ManagementIndex() {
         </li>
         <li className="nav-item">
           <button className={`nav-link ${tab === 'assign' ? 'active' : ''}`} onClick={() => setTab('assign')}>Giao việc</button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${tab === 'approval' ? 'active' : ''}`} onClick={() => setTab('approval')}>Approval Center</button>
         </li>
       </ul>
 

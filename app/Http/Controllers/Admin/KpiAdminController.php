@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\KPI;
 use App\Services\MonthlyKpiAggregator;
+use App\Services\ApprovalLogger;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -71,6 +72,18 @@ class KpiAdminController extends Controller
         $kpi->actual = $kpi->actual_progress;
         $kpi->progress = $kpi->percent;
 
+        ApprovalLogger::record(
+            'kpi',
+            $kpi->id,
+            'kpi_created',
+            [
+                'name' => $kpi->name,
+                'month' => $data['month'],
+                'user_id' => $kpi->user_id,
+            ],
+            $kpi->name
+        );
+
         return response()->json($kpi, 201);
     }
 
@@ -99,11 +112,34 @@ class KpiAdminController extends Controller
         $kpi->actual = $kpi->actual_progress;
         $kpi->progress = $kpi->percent;
 
+        ApprovalLogger::record(
+            'kpi',
+            $kpi->id,
+            'kpi_updated',
+            [
+                'name' => $kpi->name,
+                'month' => $data['month'],
+                'user_id' => $kpi->user_id,
+            ],
+            $kpi->name
+        );
+
         return response()->json($kpi);
     }
 
     public function destroy(KPI $kpi)
     {
+        ApprovalLogger::record(
+            'kpi',
+            $kpi->id,
+            'kpi_deleted',
+            [
+                'name' => $kpi->name,
+                'user_id' => $kpi->user_id,
+            ],
+            $kpi->name
+        );
+
         $kpi->delete();
         return response()->json(['success' => true]);
     }

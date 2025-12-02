@@ -288,6 +288,11 @@
 </head>
 
 <body>
+  @php
+    $currentUser = Auth::user();
+    $isExecutive = $currentUser && in_array($currentUser->role, ['Admin', 'Trưởng phòng']);
+  @endphp
+
   <div class="app-wrapper">
 
     <!-- Sidebar -->
@@ -338,6 +343,7 @@
             <span class="nav-label">Trang chủ</span>
           </a>
         </li>
+        @if(!$isExecutive)
         <li>
           <a href="/tasks" class="nav-link {{ request()->is('tasks*') ? 'active' : '' }}" data-label="Công việc">
             <i class="bi bi-journal-text"></i>
@@ -368,13 +374,14 @@
             <span class="nav-label">Báo cáo</span>
           </a>
         </li>
+        @endif
         <li>
           <div id="sidebar-notifications-root"></div>
         </li>
 
 
         @auth
-        @if(in_array(Auth::user()->role, ['Admin', 'Trưởng phòng']))
+        @if($isExecutive)
         <li>
           <a class="nav-link d-flex justify-content-between align-items-center"
             data-bs-toggle="collapse"
@@ -392,6 +399,14 @@
 
           <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenu">
             <ul class="list-unstyled ps-3 mb-0">
+              <li>
+                <a href="/management/approval-center"
+                  class="nav-link py-1 {{ request()->is('management/approval-center') ? 'active' : '' }}"
+                  data-label="Approval Center">
+                  <i class="bi bi-check2-square me-2"></i>
+                  <span class="nav-label">Approval Center</span>
+                </a>
+              </li>
               <li>
                 <a href="/management/users"
                   class="nav-link py-1 {{ request()->is('management/users') ? 'active' : '' }}"
@@ -430,14 +445,6 @@
                   data-label="Báo cáo">
                   <i class="bi bi-clipboard-check me-2"></i>
                   <span class="nav-label">Báo cáo</span>
-                </a>
-              </li>
-              <li>
-                <a href="/management/proposals"
-                  class="nav-link py-1 {{ request()->is('management/proposals') ? 'active' : '' }}"
-                  data-label="Đề xuất">
-                  <i class="bi bi-lightbulb me-2"></i>
-                  <span class="nav-label">Đề xuất</span>
                 </a>
               </li>
               <li>

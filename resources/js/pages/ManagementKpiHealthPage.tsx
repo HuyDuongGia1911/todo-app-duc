@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Badge, Button, Card, Form, Modal, Spinner, Table } from 'react-bootstrap';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -126,6 +126,24 @@ export default function ManagementKpiHealthPage({ defaultMonth }: Props) {
     fetchUsers();
   }, []);
 
+  const resolveOwnerUserIds = useCallback(
+    (owners: string[] = []) => {
+      if (!owners.length || users.length === 0) return [];
+      const normalized = owners
+        .map(owner => owner?.trim().toLowerCase())
+        .filter(Boolean) as string[];
+      if (!normalized.length) return [];
+      return users
+        .filter(user => {
+          const name = user.name?.trim().toLowerCase();
+          const email = user.email?.trim().toLowerCase();
+          return (name && normalized.includes(name)) || (email && normalized.includes(email));
+        })
+        .map(user => user.id);
+    },
+    [users]
+  );
+
   const distributionData = useMemo(() => {
     if (!snapshot?.distribution) return [];
     return (Object.keys(distributionLabels) as Array<keyof DistributionBuckets>).map(key => ({
@@ -143,7 +161,7 @@ export default function ManagementKpiHealthPage({ defaultMonth }: Props) {
   };
 
   const handleOpenTaskModal = (task: BlockedTask) => {
-    setTaskModal({ show: true, task, userIds: [] });
+    setTaskModal({ show: true, task, userIds: resolveOwnerUserIds(task.owners) });
   };
 
   const handleOpenPingModal = (task: BlockedTask) => {
@@ -153,6 +171,14 @@ export default function ManagementKpiHealthPage({ defaultMonth }: Props) {
   const closeKpiModal = () => setKpiModal(prev => ({ ...prev, show: false }));
   const closeTaskModal = () => setTaskModal(prev => ({ ...prev, show: false }));
   const closePingModal = () => setPingModal(prev => ({ ...prev, show: false }));
+
+  useEffect(() => {
+    if (!taskModal.show || !taskModal.task || taskModal.userIds.length > 0) return;
+    const resolved = resolveOwnerUserIds(taskModal.task.owners);
+    if (resolved.length) {
+      setTaskModal(prev => ({ ...prev, userIds: resolved }));
+    }
+  }, [taskModal.show, taskModal.task, taskModal.userIds.length, resolveOwnerUserIds]);
 
   const handleSubmitKpiReassign = async () => {
     if (!kpiModal.kpi || !kpiModal.userId) return;
@@ -349,10 +375,10 @@ export default function ManagementKpiHealthPage({ defaultMonth }: Props) {
                               </td>
                               <td>
                                 <div>{kpi.deadline ? new Date(kpi.deadline).toLocaleDateString('vi-VN') : '—'}</div>
-                                <small className="text-muted">
+                                <small className={kpi.days_left < 0 ? 'text-danger' : 'text-muted'}>
                                   {kpi.days_left === 0 && 'Đến hạn hôm nay'}
-                                  {kpi.days_left > 0 && `${kpi.days_left} ngày quá hạn`}
-                                  {kpi.days_left < 0 && `Còn ${Math.abs(kpi.days_left)} ngày`}
+                                  {kpi.days_left > 0 && `Còn ${kpi.days_left} ngày`}
+                                  {kpi.days_left < 0 && `Đã trễ ${Math.abs(kpi.days_left)} ngày`}
                                 </small>
                               </td>
                               <td className="text-truncate" style={{ maxWidth: 180 }}>{kpi.note || '—'}</td>

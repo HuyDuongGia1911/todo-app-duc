@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TaskAdminController;
 use App\Http\Controllers\Admin\KpiAdminController;
 use App\Http\Controllers\Admin\AssignTaskController;
+use App\Http\Controllers\Admin\ApprovalLogController;
 use App\Http\Controllers\Admin\KpiHealthController;
 use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\Admin\ReportAdminController;
@@ -104,6 +105,8 @@ Route::middleware(['auth'])->group(function () {
     //admin
     Route::middleware(['auth', 'role:Admin,Trưởng phòng'])->group(function () {
         Route::get('/management', fn() => view('management.index'))->name('management');
+        Route::get('/management/approval-center', fn() => view('management.approval-center'))
+            ->name('management.approval-center');
         Route::get('/management/proposals', fn() => view('management.proposals'))->name('management.proposals');
         Route::get('/management/kpi-health', [KpiHealthController::class, 'index'])
             ->name('management.kpi-health');
@@ -140,6 +143,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/data', [TaskProposalReviewController::class, 'index']);
             Route::post('/{taskProposal}/approve', [TaskProposalReviewController::class, 'approve']);
             Route::post('/{taskProposal}/reject', [TaskProposalReviewController::class, 'reject']);
+        });
+
+        Route::prefix('management/approval-logs')->group(function () {
+            Route::get('/data', [ApprovalLogController::class, 'index']);
         });
     });
     // ---- REPORTS (VIEW + API) -----

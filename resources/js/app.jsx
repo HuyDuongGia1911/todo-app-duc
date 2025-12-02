@@ -20,6 +20,7 @@ import TasksTab from './components/management/TasksTab.tsx';
 import KpiTab from './components/management/KpiTab.jsx';
 import ReportsTab from './components/management/ReportsTab.tsx';
 import AssignTaskTab from './components/management/AssignTaskTab.jsx';
+import ApprovalCenterTab from './components/management/ApprovalCenterTab';
 
 // CSS
 import '../css/app.css';
@@ -114,6 +115,11 @@ if (elMgmtAssign) {
 const elMgmtProposals = document.getElementById('management-proposals-app');
 if (elMgmtProposals) {
   createRoot(elMgmtProposals).render(<ManagementProposalsPage />);
+}
+
+const elMgmtApprovalCenter = document.getElementById('management-approval-center-app');
+if (elMgmtApprovalCenter) {
+  createRoot(elMgmtApprovalCenter).render(<ApprovalCenterTab />);
 }
 
 const elSidebarNotifications = document.getElementById('sidebar-notifications-root');

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\MonthlySummary;
 use Illuminate\Http\Request;
+use App\Services\ApprovalLogger;
+use Illuminate\Support\Facades\DB;
 
 class ReportAdminController extends Controller
 {
@@ -88,15 +90,28 @@ return response()->json([
      */
     public function unlock(MonthlySummary $report)
     {
-        // Nếu đã mở khoá thì trả thông báo nhẹ nhàng
         if (is_null($report->locked_at)) {
             return response()->json([
                 'message' => 'Báo cáo đã ở trạng thái chưa chốt.',
             ], 200);
         }
 
-        $report->locked_at = null;
-        $report->save();
+        DB::transaction(function () use ($report) {
+            $report->locked_at = null;
+            $report->save();
+
+            ApprovalLogger::record(
+                'monthly_summary',
+                $report->id,
+                'report_unlocked',
+                [
+                    'month' => $report->month,
+                    'title' => $report->title,
+                    'user_id' => $report->user_id,
+                ],
+                $report->title ?? ('Báo cáo ' . $report->month)
+            );
+        });
 
         return response()->json([
             'message' => 'Đã gỡ "Chốt" báo cáo thành công.',

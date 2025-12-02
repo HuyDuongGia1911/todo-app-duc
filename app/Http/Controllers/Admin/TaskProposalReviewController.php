@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use App\Services\ApprovalLogger;
 
 class TaskProposalReviewController extends Controller
 {
@@ -89,6 +90,26 @@ class TaskProposalReviewController extends Controller
             $proposal->linked_kpi_id = $data['linked_kpi_id'] ?? null;
             $proposal->user_read_at = null; // ép nhân viên phải đọc lại quyết định mới
             $proposal->save();
+
+            ApprovalLogger::record(
+                'task_proposal',
+                $proposal->id,
+                $status === 'approved' ? 'proposal_approved' : 'proposal_rejected',
+                [
+                    'proposal' => [
+                        'title' => $proposal->title,
+                        'type' => $proposal->type,
+                        'user_id' => $proposal->user_id,
+                    ],
+                    'decision' => [
+                        'status' => $status,
+                        'note' => $data['review_note'] ?? null,
+                        'linked_task_id' => $data['linked_task_id'] ?? null,
+                        'linked_kpi_id' => $data['linked_kpi_id'] ?? null,
+                    ],
+                ],
+                $proposal->title
+            );
         });
 
         $proposal->refresh()->load(['user:id,name,email,avatar', 'reviewer:id,name,avatar']);

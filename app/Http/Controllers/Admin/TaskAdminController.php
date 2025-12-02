@@ -23,16 +23,24 @@ class TaskAdminController extends Controller
     public function store(Request $request)
     {
         $data = $this->validateData($request);
+        $userIds = $this->validatedUserIds($request);
 
-        $data['assigned_by'] = auth()->id();
-        $data['user_id'] = $data['user_id'] ?? auth()->id();
+        if (empty($userIds) && $request->filled('user_id')) {
+            $userIds = [(int) $request->input('user_id')];
+        }
+
+        if (empty($userIds)) {
+            return response()->json(['message' => 'Vui lòng chọn ít nhất 1 người nhận'], 422);
+        }
+
+        $data['assigned_by'] = $request->filled('assigned_by')
+            ? (int) $request->input('assigned_by')
+            : auth()->id();
+        $data['user_id'] = $userIds[0];
 
         $task = Task::create($data);
 
-        // Nếu có users[] gửi lên → lưu vào bảng pivot
-        if ($request->filled('user_ids')) {
-            $task->users()->sync($request->user_ids);
-        }
+        $task->users()->sync($userIds);
 
         return response()->json(
             $task->load(['users:id,name', 'assignedByUser:id,name'])
@@ -59,10 +67,25 @@ class TaskAdminController extends Controller
         }
 
         $data = $this->validateData($request, $task->id);
-        $task->update($data);
-        if ($request->filled('user_ids')) {
-            $task->users()->sync($request->user_ids);
+        $userIds = $this->validatedUserIds($request);
+
+        if ($request->has('user_ids')) {
+            if (empty($userIds)) {
+                $task->users()->sync([]);
+                $data['user_id'] = null;
+            } else {
+                $task->users()->sync($userIds);
+                $data['user_id'] = $userIds[0];
+            }
+        } elseif ($request->filled('user_id')) {
+            $data['user_id'] = (int) $request->input('user_id');
         }
+
+        if ($request->filled('assigned_by')) {
+            $data['assigned_by'] = (int) $request->input('assigned_by');
+        }
+
+        $task->update($data);
 
         return response()->json(
             $task->load(['users:id,name', 'assignedByUser:id,name'])
@@ -90,6 +113,27 @@ class TaskAdminController extends Controller
             'supervisor' => 'nullable|string|max:255',
             'detail'    => 'nullable|string',
             'file_link' => 'nullable|string|max:1000',
+            'user_id'   => 'nullable|exists:users,id',
+            'assigned_by' => 'nullable|exists:users,id',
         ]);
+    }
+
+    private function validatedUserIds(Request $request): array
+    {
+        if (!$request->has('user_ids')) {
+            return [];
+        }
+
+        $request->validate([
+            'user_ids' => 'array',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        return collect($request->input('user_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 }
