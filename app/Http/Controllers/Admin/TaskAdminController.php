@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class TaskAdminController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Task::with(['users:id,name', 'assignedByUser:id,name'])
+        $query = Task::with(['users:id,name', 'assignedByUser:id,name', 'files'])
             ->orderBy('task_date', 'desc');
 
         if ($request->wantsJson() || $request->expectsJson()) {
@@ -33,6 +35,14 @@ class TaskAdminController extends Controller
             return response()->json(['message' => 'Vui lòng chọn ít nhất 1 người nhận'], 422);
         }
 
+        $blockedAdmins = $this->blockedAdminRecipients($userIds);
+        if (!empty($blockedAdmins)) {
+            return response()->json([
+                'message' => 'Trưởng phòng không thể giao việc cho Admin',
+                'recipients' => $blockedAdmins,
+            ], 422);
+        }
+
         $data['assigned_by'] = $request->filled('assigned_by')
             ? (int) $request->input('assigned_by')
             : auth()->id();
@@ -41,17 +51,18 @@ class TaskAdminController extends Controller
         $task = Task::create($data);
 
         $task->users()->sync($userIds);
+        $this->syncAttachments($request, $task);
 
         return response()->json(
-            $task->load(['users:id,name', 'assignedByUser:id,name'])
+            $task->load(['users:id,name', 'assignedByUser:id,name', 'files'])
                 ->append('calculated_progress')
         );
     }
 
     public function update(Request $request, Task $task)
     {
-        // Hỗ trợ method spoofing (_method=PUT)
-        if ($request->input('_method') === 'PUT') {
+        // Hỗ trợ cập nhật nhanh trạng thái qua JSON
+        if ($request->input('_method') === 'PUT' && $request->isJson()) {
             $data = $request->only(['status', 'priority', 'progress']);
             $task->update($data);
 
@@ -61,7 +72,7 @@ class TaskAdminController extends Controller
             }
 
             return response()->json(
-                $task->load(['users:id,name', 'assignedByUser:id,name'])
+                $task->load(['users:id,name', 'assignedByUser:id,name', 'files'])
                     ->append('calculated_progress')
             );
         }
@@ -70,6 +81,13 @@ class TaskAdminController extends Controller
         $userIds = $this->validatedUserIds($request);
 
         if ($request->has('user_ids')) {
+            $blockedAdmins = $this->blockedAdminRecipients($userIds);
+            if (!empty($blockedAdmins)) {
+                return response()->json([
+                    'message' => 'Trưởng phòng không thể giao việc cho Admin',
+                    'recipients' => $blockedAdmins,
+                ], 422);
+            }
             if (empty($userIds)) {
                 $task->users()->sync([]);
                 $data['user_id'] = null;
@@ -79,6 +97,14 @@ class TaskAdminController extends Controller
             }
         } elseif ($request->filled('user_id')) {
             $data['user_id'] = (int) $request->input('user_id');
+
+            $blockedAdmins = $this->blockedAdminRecipients([$data['user_id']]);
+            if (!empty($blockedAdmins)) {
+                return response()->json([
+                    'message' => 'Trưởng phòng không thể giao việc cho Admin',
+                    'recipients' => $blockedAdmins,
+                ], 422);
+            }
         }
 
         if ($request->filled('assigned_by')) {
@@ -86,9 +112,10 @@ class TaskAdminController extends Controller
         }
 
         $task->update($data);
+        $this->syncAttachments($request, $task);
 
         return response()->json(
-            $task->load(['users:id,name', 'assignedByUser:id,name'])
+            $task->load(['users:id,name', 'assignedByUser:id,name', 'files'])
                 ->append('calculated_progress')
         );
     }
@@ -115,6 +142,9 @@ class TaskAdminController extends Controller
             'file_link' => 'nullable|string|max:1000',
             'user_id'   => 'nullable|exists:users,id',
             'assigned_by' => 'nullable|exists:users,id',
+            'attachments.*' => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png',
+            'remove_attachment_ids' => 'nullable|array',
+            'remove_attachment_ids.*' => 'integer',
         ]);
     }
 
@@ -135,5 +165,50 @@ class TaskAdminController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function blockedAdminRecipients(array $userIds): array
+    {
+        $current = auth()->user();
+        if (!$current || $current->role !== 'Trưởng phòng' || empty($userIds)) {
+            return [];
+        }
+
+        return User::whereIn('id', $userIds)
+            ->where('role', 'Admin')
+            ->pluck('name')
+            ->all();
+    }
+
+    private function syncAttachments(Request $request, Task $task): void
+    {
+        foreach ((array) $request->file('attachments') as $uploadedFile) {
+            if (!$uploadedFile) {
+                continue;
+            }
+
+            $path = $uploadedFile->store('task-files', 'public');
+
+            $task->files()->create([
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'path'          => $path,
+                'mime_type'     => $uploadedFile->getClientMimeType(),
+                'size'          => $uploadedFile->getSize(),
+            ]);
+        }
+
+        $removalIds = array_filter((array) $request->input('remove_attachment_ids', []));
+        if (empty($removalIds)) {
+            return;
+        }
+
+        $files = $task->files()->whereIn('id', $removalIds)->get();
+
+        foreach ($files as $file) {
+            if ($file->path) {
+                Storage::disk('public')->delete($file->path);
+            }
+            $file->delete();
+        }
     }
 }

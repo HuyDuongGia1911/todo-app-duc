@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,14 @@ class AssignTaskController extends Controller
             return response()->json(['message' => 'Vui lòng chọn ít nhất 1 người nhận'], 422);
         }
 
+        $blockedAdmins = $this->blockedAdminRecipients($assignees);
+        if (!empty($blockedAdmins)) {
+            return response()->json([
+                'message' => 'Trưởng phòng không thể giao việc cho Admin',
+                'recipients' => $blockedAdmins,
+            ], 422);
+        }
+
         $task = DB::transaction(function () use ($data, $assignees, $request) {
             $payload = collect($data)->except(['user_ids', 'user_id'])->toArray();
 
@@ -90,6 +99,16 @@ class AssignTaskController extends Controller
     {
         $data = $this->validateData($request, false);
         $assignees = $this->normalizeAssignees($request); // null = không động pivot
+
+        if (is_array($assignees)) {
+            $blockedAdmins = $this->blockedAdminRecipients($assignees);
+            if (!empty($blockedAdmins)) {
+                return response()->json([
+                    'message' => 'Trưởng phòng không thể giao việc cho Admin',
+                    'recipients' => $blockedAdmins,
+                ], 422);
+            }
+        }
 
         DB::transaction(function () use ($task, $data, $assignees, $request) {
             $payload = collect($data)->except(['user_ids', 'user_id'])->toArray();
@@ -154,5 +173,18 @@ class AssignTaskController extends Controller
         }
         // store: validate đã đảm bảo có 1 trong 2; update: null = không đụng pivot
         return $request->isMethod('post') ? [] : null;
+    }
+
+    private function blockedAdminRecipients(array $userIds): array
+    {
+        $current = Auth::user();
+        if (!$current || $current->role !== 'Trưởng phòng' || empty($userIds)) {
+            return [];
+        }
+
+        return User::whereIn('id', $userIds)
+            ->where('role', 'Admin')
+            ->pluck('name')
+            ->all();
     }
 }

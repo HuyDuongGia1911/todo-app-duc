@@ -14,6 +14,9 @@ export default function AssignTaskTab() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const currentRole = (window.currentUserRole || '').trim();
+  const isSupervisor = currentRole === 'Trưởng phòng';
+  const isAdmin = currentRole === 'Admin';
 
   const [form, setForm] = useState({
     user_ids: [],        // ✅ nhiều người
@@ -51,14 +54,18 @@ export default function AssignTaskTab() {
         const [tData, uData] = await Promise.all([tRes.json(), uRes.json()]);
         setTasks(Array.isArray(tData) ? tData : []);
         setCurrentPage(1);
-        setUsers(Array.isArray(uData) ? uData : []);
+        const normalizedUsers = Array.isArray(uData) ? uData : [];
+        const filteredUsers = isSupervisor
+          ? normalizedUsers.filter(u => u.role !== 'Admin')
+          : normalizedUsers;
+        setUsers(filteredUsers);
       } catch (e) {
         Swal.fire("Lỗi", "Không tải được dữ liệu", "error");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isSupervisor]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil((tasks.length || 0) / itemsPerPage));
@@ -224,15 +231,17 @@ export default function AssignTaskTab() {
                 placeholder="-- Chọn user --"
                 classNamePrefix="react-select"
               />
-              <div className="d-flex gap-2 mt-2">
-                <Form.Control
-                  type="text"
-                  placeholder="Tên user mới"
-                  value={form.newUserName}
-                  onChange={e => setForm(prev => ({ ...prev, newUserName: e.target.value }))}
-                />
-                <Button variant="outline-primary" onClick={handleCreateUser}>+ Tạo</Button>
-              </div>
+              {isAdmin && (
+                <div className="d-flex gap-2 mt-2">
+                  <Form.Control
+                    type="text"
+                    placeholder="Tên user mới"
+                    value={form.newUserName}
+                    onChange={e => setForm(prev => ({ ...prev, newUserName: e.target.value }))}
+                  />
+                  <Button variant="outline-primary" onClick={handleCreateUser}>+ Tạo</Button>
+                </div>
+              )}
             </Col>
 
             <Col md={6}>

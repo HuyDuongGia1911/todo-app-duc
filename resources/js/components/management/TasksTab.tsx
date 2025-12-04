@@ -31,6 +31,7 @@ interface AdminTask {
   assigned_by_user?: { id?: number; name?: string } | null;
   users?: Array<{ id?: number; name?: string }>;
   user_id?: number | string | null;
+  files?: Array<{ id: number; original_name: string; url?: string; size?: number }>;
 }
 
 interface UserLite {

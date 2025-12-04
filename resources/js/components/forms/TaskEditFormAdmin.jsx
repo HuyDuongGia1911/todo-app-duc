@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Form, Button, Row, Col } from "react-bootstrap";
 import AsyncDropdownSelect from "../AsyncDropdownSelect";
 import Swal from "sweetalert2";
@@ -37,8 +37,20 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
 
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(initialFormState);
+  const [existingFiles, setExistingFiles] = useState(task.files || []);
+  const [newFiles, setNewFiles] = useState([]);
+  const [removeFileIds, setRemoveFileIds] = useState([]);
 
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+  const fileInputRef = useRef(null);
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return "0 KB";
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
 
   useEffect(() => {
     if (!task) return;
@@ -61,6 +73,12 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
           : "",
       user_ids: normalizeUserIds(task),
     });
+    setExistingFiles(task.files || []);
+    setNewFiles([]);
+    setRemoveFileIds([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setEditMode(false);
   }, [task]);
 
@@ -77,34 +95,49 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
         .map((value) => Number(value))
         .filter((id) => !Number.isNaN(id));
 
-      const payload = {
-        title: form.title,
-        task_date: form.task_date,
-        deadline_at: form.deadline_at || form.task_date,
-        shift: form.shift || null,
-        type: form.type || null,
-        supervisor: form.supervisor || null,
-        priority: form.priority || null,
-        detail: form.detail || null,
-        file_link: form.file_link || null,
-        status: form.status || "Chưa hoàn thành",
-        progress:
-          form.progress === "" || form.progress === null
-            ? null
-            : Math.max(0, Math.min(100, Number(form.progress))),
-        assigned_by: form.assigned_by ? Number(form.assigned_by) : null,
-        user_ids: userIds,
-        user_id: userIds[0] ?? null,
-      };
+      const payload = new FormData();
+      payload.append("_method", "PUT");
+      payload.append("title", form.title);
+      payload.append("task_date", form.task_date);
+      payload.append("deadline_at", form.deadline_at || form.task_date);
+      payload.append("status", form.status || "Chưa hoàn thành");
+
+      if (form.shift) payload.append("shift", form.shift);
+      if (form.type) payload.append("type", form.type);
+      if (form.supervisor) payload.append("supervisor", form.supervisor);
+      if (form.priority) payload.append("priority", form.priority);
+      if (form.detail) payload.append("detail", form.detail);
+      if (form.file_link) payload.append("file_link", form.file_link);
+
+      const normalizedProgress =
+        form.progress === "" || form.progress === null
+          ? null
+          : Math.max(0, Math.min(100, Number(form.progress)));
+      if (normalizedProgress !== null && !Number.isNaN(normalizedProgress)) {
+        payload.append("progress", String(normalizedProgress));
+      }
+
+      if (form.assigned_by) {
+        payload.append("assigned_by", String(form.assigned_by));
+      }
+
+      if (userIds.length) {
+        payload.append("user_id", String(userIds[0]));
+        userIds.forEach((id) => payload.append("user_ids[]", String(id)));
+      } else {
+        payload.append("user_id", "");
+      }
+
+      newFiles.forEach((file) => payload.append("attachments[]", file));
+      removeFileIds.forEach((id) => payload.append("remove_attachment_ids[]", id));
 
       const res = await fetch(`/management/tasks/${task.id}`, {
-        method: "PUT",
+        method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Accept: "application/json",
           "X-CSRF-TOKEN": csrf,
         },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
       if (!res.ok) throw new Error("Lỗi cập nhật");
@@ -113,6 +146,12 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
       Swal.fire("Thành công", "Đã cập nhật công việc", "success");
       onSuccess?.(data);
       setEditMode(false);
+      setExistingFiles(data.files || []);
+      setNewFiles([]);
+      setRemoveFileIds([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (error) {
       console.error(error);
       Swal.fire("Lỗi", "Không thể cập nhật công việc", "error");
@@ -120,6 +159,12 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
   };
 
   const disable = !editMode;
+
+  const toggleRemoveFile = (fileId) => {
+    setRemoveFileIds((prev) =>
+      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
+    );
+  };
 
   return (
     <Form onSubmit={handleSubmit}>
@@ -301,6 +346,71 @@ export default function TaskEditFormAdmin({ task, onSuccess, onCancel }) {
               onChange={handleChange}
               disabled={disable}
             />
+          </Form.Group>
+        </Col>
+
+        <Col md={12}>
+          <Form.Group className="input-wrapper">
+            <Form.Label className="label-inside">Tệp đính kèm</Form.Label>
+            {existingFiles.length === 0 ? (
+              <p className="text-muted mb-2">Chưa có tệp nào.</p>
+            ) : (
+              <ul className="attachment-list mb-2">
+                {existingFiles.map((file) => {
+                  const marked = removeFileIds.includes(file.id);
+                  return (
+                    <li
+                      key={file.id}
+                      className={`attachment-list__item d-flex justify-content-between align-items-center ${marked ? 'attachment-list__item--remove' : ''}`}
+                    >
+                      <div>
+                        <a href={file.url} target="_blank" rel="noreferrer" className="me-2">
+                          {file.original_name}
+                        </a>
+                        <small className="text-muted">{formatFileSize(file.size)}</small>
+                      </div>
+                      {editMode && (
+                        <Button variant="link" size="sm" type="button" onClick={() => toggleRemoveFile(file.id)}>
+                          {marked ? 'Bỏ xoá' : 'Xoá'}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <Form.Control
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png"
+              onChange={(e) => {
+                setNewFiles(Array.from(e.target.files || []));
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
+              }}
+              disabled={disable}
+              ref={fileInputRef}
+            />
+            <small className="text-muted d-block mt-2">Mỗi tệp tối đa 10MB.</small>
+            {newFiles.length > 0 && (
+              <ul className="attachment-list mt-2">
+                {newFiles.map((file, idx) => (
+                  <li key={`${file.name}-${idx}`} className="attachment-list__item d-flex justify-content-between align-items-center">
+                    <span>{file.name}</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      type="button"
+                      onClick={() => setNewFiles((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      Gỡ
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Form.Group>
         </Col>
 

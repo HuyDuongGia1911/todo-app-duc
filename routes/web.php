@@ -108,17 +108,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/management/approval-center', fn() => view('management.approval-center'))
             ->name('management.approval-center');
         Route::get('/management/proposals', fn() => view('management.proposals'))->name('management.proposals');
-        Route::get('/management/kpi-health', [KpiHealthController::class, 'index'])
-            ->name('management.kpi-health');
-        Route::get('/management/kpi-health/snapshot', [KpiHealthController::class, 'snapshot']);
-        Route::post('/management/kpi-health/kpis/{kpi}/reassign', [KpiHealthController::class, 'reassignKpi']);
-        Route::post('/management/kpi-health/tasks/{task}/reassign', [KpiHealthController::class, 'reassignTask']);
-        Route::post('/management/kpi-health/tasks/{task}/ping', [KpiHealthController::class, 'pingTask']);
-        // ---- USERS
-        Route::get('/management/users', [UserController::class, 'index']);
-        Route::post('/management/users', [UserController::class, 'store']);
-        Route::put('/management/users/{user}', [UserController::class, 'update']);
-        Route::delete('/management/users/{user}', [UserController::class, 'destroy']);
         // ---- TASKS (mới) ----
         Route::get('/management/tasks',            [TaskAdminController::class, 'index']);
         Route::post('/management/tasks',            [TaskAdminController::class, 'store']);
@@ -148,6 +137,24 @@ Route::middleware(['auth'])->group(function () {
         Route::prefix('management/approval-logs')->group(function () {
             Route::get('/data', [ApprovalLogController::class, 'index']);
         });
+    });
+
+    // ---- ADMIN ONLY: USER MANAGEMENT ----
+    Route::middleware(['auth', 'role:Admin'])->group(function () {
+        Route::get('/management/users', [UserController::class, 'index']);
+        Route::post('/management/users', [UserController::class, 'store']);
+        Route::put('/management/users/{user}', [UserController::class, 'update']);
+        Route::delete('/management/users/{user}', [UserController::class, 'destroy']);
+    });
+
+    // ---- SUPERVISOR ONLY: KPI HEALTH TOOLING ----
+    Route::middleware(['auth', 'role:Trưởng phòng'])->group(function () {
+        Route::get('/management/kpi-health', [KpiHealthController::class, 'index'])
+            ->name('management.kpi-health');
+        Route::get('/management/kpi-health/snapshot', [KpiHealthController::class, 'snapshot']);
+        Route::post('/management/kpi-health/kpis/{kpi}/reassign', [KpiHealthController::class, 'reassignKpi']);
+        Route::post('/management/kpi-health/tasks/{task}/reassign', [KpiHealthController::class, 'reassignTask']);
+        Route::post('/management/kpi-health/tasks/{task}/ping', [KpiHealthController::class, 'pingTask']);
     });
     // ---- REPORTS (VIEW + API) -----
     Route::middleware('role:Admin,Trưởng phòng')->group(function () {
@@ -229,8 +236,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
     Route::get('/dashboard/tasks', [DashboardApiController::class, 'taskList']);
     Route::get('/dashboard/kpi-progress/{id}', [DashboardApiController::class, 'kpiProgress']);
     Route::get('/kpis', [DashboardApiController::class, 'kpiList']);
+
     Route::get('/users', function () {
-        return User::select('id', 'name', 'email', 'avatar')->get();
+        return User::select('id', 'name', 'email', 'avatar', 'role')->get();
     });
     // web.php
     Route::post('/tasks/{task}/user-status', [TaskController::class, 'updateUserStatus']);

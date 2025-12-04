@@ -131,6 +131,13 @@ export default function ApprovalCenterTab() {
   const [logMeta, setLogMeta] = useState<{ total: number }>({ total: 0 });
   const [logFilters, setLogFilters] = useState<{ entityType: string; action: string }>(() => ({ entityType: 'all', action: 'all' }));
 
+  const currentRole = (
+    typeof window !== 'undefined' && (window as any).currentUserRole
+      ? String((window as any).currentUserRole)
+      : ''
+  ).trim();
+  const canUseKpiHealth = currentRole === 'Trưởng phòng';
+
   const [decisionModal, setDecisionModal] = useState<{ show: boolean; proposal: Proposal | null; action: DecisionAction | null; note: string; linkTaskId: string; linkKpiId: string; submitting: boolean }>(
     { show: false, proposal: null, action: null, note: '', linkTaskId: '', linkKpiId: '', submitting: false }
   );
@@ -184,6 +191,7 @@ export default function ApprovalCenterTab() {
   };
 
   const fetchSnapshot = async () => {
+    if (!canUseKpiHealth) return;
     setSnapshotLoading(true);
     try {
       const res = await axios.get<SnapshotResponse>('/management/kpi-health/snapshot', { params: { month: snapshotMonth } });
@@ -221,13 +229,21 @@ export default function ApprovalCenterTab() {
   useEffect(() => {
     fetchProposals();
     fetchReports();
-    loadUsers();
-  }, []);
+    if (canUseKpiHealth) {
+      loadUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseKpiHealth]);
 
   useEffect(() => {
+    if (!canUseKpiHealth) {
+      setSnapshot(null);
+      setSnapshotLoading(false);
+      return;
+    }
     fetchSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshotMonth]);
+  }, [snapshotMonth, canUseKpiHealth]);
 
   useEffect(() => {
     fetchApprovalLogs();
@@ -670,7 +686,14 @@ export default function ApprovalCenterTab() {
           <p className="text-muted mb-0">Gom nhanh các thao tác duyệt đề xuất, gỡ chốt báo cáo và xử lý task nghẽn.</p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-primary" onClick={() => { fetchProposals(); fetchReports(); fetchSnapshot(); fetchApprovalLogs(); }}>
+          <Button variant="outline-primary" onClick={() => {
+            fetchProposals();
+            fetchReports();
+            if (canUseKpiHealth) {
+              fetchSnapshot();
+            }
+            fetchApprovalLogs();
+          }}>
             Làm mới tất cả
           </Button>
         </div>
@@ -680,12 +703,14 @@ export default function ApprovalCenterTab() {
         <div className="col-12">
           {proposalSection}
         </div>
-        <div className="col-xl-6 col-lg-12">
+        <div className={canUseKpiHealth ? 'col-xl-6 col-lg-12' : 'col-12'}>
           {reportsSection}
         </div>
-        <div className="col-xl-6 col-lg-12">
-          {tasksSection}
-        </div>
+        {canUseKpiHealth && (
+          <div className="col-xl-6 col-lg-12">
+            {tasksSection}
+          </div>
+        )}
       </div>
 
       <div className="row g-4 mt-1">
@@ -741,62 +766,66 @@ export default function ApprovalCenterTab() {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={taskModal.show} onHide={closeTaskModal} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Chuyển giao công việc</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p className="mb-3">Task: <strong>{taskModal.task?.title}</strong></p>
-          <Form.Group>
-            <Form.Label>Người nhận mới</Form.Label>
-            <Form.Select
-              multiple
-              disabled={usersLoading}
-              value={taskModal.userIds.map(String)}
-              onChange={e => {
-                const next = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
-                setTaskModal(prev => ({ ...prev, userIds: next }));
-              }}
-              htmlSize={6}
-            >
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.name}</option>
-              ))}
-            </Form.Select>
-            <small className="text-muted d-block mt-2">Danh sách người nhận sẽ được thay thế.</small>
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closeTaskModal}>Huỷ</Button>
-          <Button variant="primary" onClick={submitTaskReassign} disabled={taskModal.userIds.length === 0 || taskModal.saving}>
-            {taskModal.saving ? 'Đang cập nhật...' : 'Chuyển giao'}
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      {canUseKpiHealth && (
+        <>
+          <Modal show={taskModal.show} onHide={closeTaskModal} centered>
+            <Modal.Header closeButton>
+              <Modal.Title>Chuyển giao công việc</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="mb-3">Task: <strong>{taskModal.task?.title}</strong></p>
+              <Form.Group>
+                <Form.Label>Người nhận mới</Form.Label>
+                <Form.Select
+                  multiple
+                  disabled={usersLoading}
+                  value={taskModal.userIds.map(String)}
+                  onChange={e => {
+                    const next = Array.from(e.target.selectedOptions).map(opt => Number(opt.value));
+                    setTaskModal(prev => ({ ...prev, userIds: next }));
+                  }}
+                  htmlSize={6}
+                >
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </Form.Select>
+                <small className="text-muted d-block mt-2">Danh sách người nhận sẽ được thay thế.</small>
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="secondary" onClick={closeTaskModal}>Huỷ</Button>
+              <Button variant="primary" onClick={submitTaskReassign} disabled={taskModal.userIds.length === 0 || taskModal.saving}>
+                {taskModal.saving ? 'Đang cập nhật...' : 'Chuyển giao'}
+              </Button>
+            </Modal.Footer>
+          </Modal>
 
-      <Modal show={pingModal.show} onHide={closePingModal} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Ping chủ trì</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p className="mb-3">Task: <strong>{pingModal.task?.title}</strong></p>
-          <Form.Group>
-            <Form.Label>Nội dung</Form.Label>
-            <Form.Control
-              as="textarea"
-              rows={4}
-              value={pingModal.message}
-              onChange={e => setPingModal(prev => ({ ...prev, message: e.target.value }))}
-            />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closePingModal}>Huỷ</Button>
-          <Button variant="warning" onClick={submitPing} disabled={!pingModal.message.trim() || pingModal.submitting}>
-            {pingModal.submitting ? 'Đang gửi...' : 'Gửi ping'}
-          </Button>
-        </Modal.Footer>
-      </Modal>
+          <Modal show={pingModal.show} onHide={closePingModal} centered>
+            <Modal.Header closeButton>
+              <Modal.Title>Ping chủ trì</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="mb-3">Task: <strong>{pingModal.task?.title}</strong></p>
+              <Form.Group>
+                <Form.Label>Nội dung</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={4}
+                  value={pingModal.message}
+                  onChange={e => setPingModal(prev => ({ ...prev, message: e.target.value }))}
+                />
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="secondary" onClick={closePingModal}>Huỷ</Button>
+              <Button variant="warning" onClick={submitPing} disabled={!pingModal.message.trim() || pingModal.submitting}>
+                {pingModal.submitting ? 'Đang gửi...' : 'Gửi ping'}
+              </Button>
+            </Modal.Footer>
+          </Modal>
+        </>
+      )}
     </div>
   );
 }

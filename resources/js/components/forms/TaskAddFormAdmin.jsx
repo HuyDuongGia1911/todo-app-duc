@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Form, Button, Row, Col } from 'react-bootstrap';
 import Swal from 'sweetalert2';
 import AsyncDropdownSelect from '../AsyncDropdownSelect';
@@ -20,11 +20,23 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAttachmentChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    setAttachments(files);
+    e.target.value = '';
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -84,27 +96,45 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
         .map(value => Number(value))
         .filter(id => !Number.isNaN(id));
 
-      const payload = {
-        ...form,
-        user_ids: userIds,
-        user_id: userIds[0] ?? null,
-        assigned_by: form.assigned_by ? Number(form.assigned_by) : null,
-        status: 'Chưa hoàn thành',
-        deadline_at: form.deadline_at || form.task_date,
-        progress:
-          form.progress === '' || form.progress === null
-            ? null
-            : Math.max(0, Math.min(100, Number(form.progress))),
-      };
+      const payload = new FormData();
+      payload.append('title', form.title.trim());
+      payload.append('task_date', form.task_date);
+      payload.append('deadline_at', form.deadline_at || form.task_date);
+      payload.append('status', 'Chưa hoàn thành');
+
+      if (form.priority) payload.append('priority', form.priority);
+      if (form.shift) payload.append('shift', form.shift);
+      if (form.type) payload.append('type', form.type);
+      if (form.supervisor) payload.append('supervisor', form.supervisor);
+      if (form.detail) payload.append('detail', form.detail);
+      if (form.file_link) payload.append('file_link', form.file_link);
+
+      const normalizedProgress =
+        form.progress === '' || form.progress === null
+          ? null
+          : Math.max(0, Math.min(100, Number(form.progress)));
+      if (normalizedProgress !== null && !Number.isNaN(normalizedProgress)) {
+        payload.append('progress', String(normalizedProgress));
+      }
+
+      if (form.assigned_by) {
+        payload.append('assigned_by', String(form.assigned_by));
+      }
+
+      if (userIds.length) {
+        payload.append('user_id', String(userIds[0]));
+        userIds.forEach(id => payload.append('user_ids[]', String(id)));
+      }
+
+      attachments.forEach(file => payload.append('attachments[]', file));
 
       const res = await fetch('/management/tasks', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Accept: 'application/json',
           'X-CSRF-TOKEN': csrf,
         },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
       if (!res.ok) {
@@ -113,8 +143,26 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
         throw new Error('Lỗi khi thêm công việc');
       }
 
-      const task = await res.json(); // nên đã load quan hệ user & assignedByUser ở backend
+      const task = await res.json();
       onSuccess?.(task);
+      setAttachments([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setForm({
+        title: '',
+        task_date: '',
+        deadline_at: '',
+        shift: '',
+        type: '',
+        supervisor: '',
+        detail: '',
+        file_link: '',
+        priority: '',
+        progress: '',
+        user_ids: [],
+        assigned_by: '',
+      });
     } catch (err) {
       console.error(err);
       Swal.fire('Lỗi', 'Không thể thêm công việc', 'error');
@@ -256,6 +304,37 @@ export default function TaskAddFormAdmin({ onSuccess, onCancel }) {
               onChange={handleChange}
               placeholder="Link file, phân cách bằng dấu phẩy"
             />
+          </Form.Group>
+        </Col>
+
+        <Col md={12}>
+          <Form.Group className="input-wrapper">
+            <Form.Label className="label-inside">Đính kèm tệp (Word/PDF/Excel...)</Form.Label>
+            <Form.Control
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png"
+              onChange={handleAttachmentChange}
+              ref={fileInputRef}
+            />
+            <small className="text-muted d-block mt-2">Mỗi tệp tối đa 10MB.</small>
+            {attachments.length > 0 && (
+              <ul className="attachment-list mt-2">
+                {attachments.map((file, idx) => (
+                  <li key={`${file.name}-${idx}`} className="attachment-list__item d-flex justify-content-between align-items-center">
+                    <span>{file.name}</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      type="button"
+                      onClick={() => removeAttachment(idx)}
+                    >
+                      Gỡ
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Form.Group>
         </Col>
 

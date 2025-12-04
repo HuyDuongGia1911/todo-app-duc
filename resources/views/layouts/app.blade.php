@@ -290,7 +290,9 @@
 <body>
   @php
     $currentUser = Auth::user();
-    $isExecutive = $currentUser && in_array($currentUser->role, ['Admin', 'Trưởng phòng']);
+    $currentRole = $currentUser->role ?? null;
+    $isAdmin = $currentRole === 'Admin';
+    $isSupervisor = $currentRole === 'Trưởng phòng';
   @endphp
 
   <div class="app-wrapper">
@@ -343,7 +345,7 @@
             <span class="nav-label">Trang chủ</span>
           </a>
         </li>
-        @if(!$isExecutive)
+        @if(!$isAdmin)
         <li>
           <a href="/tasks" class="nav-link {{ request()->is('tasks*') ? 'active' : '' }}" data-label="Công việc">
             <i class="bi bi-journal-text"></i>
@@ -381,23 +383,23 @@
 
 
         @auth
-        @if($isExecutive)
+        @if($isAdmin)
         <li>
           <a class="nav-link d-flex justify-content-between align-items-center"
             data-bs-toggle="collapse"
-            href="#mgmtMenu"
+            href="#mgmtMenuAdmin"
             role="button"
             aria-expanded="{{ request()->is('management*') ? 'true' : 'false' }}"
-            aria-controls="mgmtMenu"
-            data-label="Quản lý">
+            aria-controls="mgmtMenuAdmin"
+            data-label="Quản lý (Admin)">
             <span class="d-flex align-items-center gap-2">
               <i class="bi bi-gear-fill"></i>
-              <span class="nav-label">Quản lý</span>
+              <span class="nav-label">Quản lý (Admin)</span>
             </span>
             <i class="bi bi-chevron-down small mgmt-chevron"></i>
           </a>
 
-          <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenu">
+          <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenuAdmin">
             <ul class="list-unstyled ps-3 mb-0">
               <li>
                 <a href="/management/approval-center"
@@ -413,6 +415,69 @@
                   data-label="Người dùng">
                   <i class="bi bi-people me-2"></i>
                   <span class="nav-label">Người dùng</span>
+                </a>
+              </li>
+              <li>
+                <a href="/management/tasks"
+                  class="nav-link py-1 {{ request()->is('management/tasks') ? 'active' : '' }}"
+                  data-label="Công việc">
+                  <i class="bi bi-journal-text me-2"></i>
+                  <span class="nav-label">Công việc</span>
+                </a>
+              </li>
+              <li>
+                <a href="/management/kpis"
+                  class="nav-link py-1 {{ request()->is('management/kpis') ? 'active' : '' }}"
+                  data-label="KPI">
+                  <i class="bi bi-speedometer2 me-2"></i>
+                  <span class="nav-label">KPI</span>
+                </a>
+              </li>
+              <li>
+                <a href="/management/reports"
+                  class="nav-link py-1 {{ request()->is('management/reports') ? 'active' : '' }}"
+                  data-label="Báo cáo">
+                  <i class="bi bi-clipboard-check me-2"></i>
+                  <span class="nav-label">Báo cáo</span>
+                </a>
+              </li>
+              <li>
+                <a href="/management/assign"
+                  class="nav-link py-1 {{ request()->is('management/assign') ? 'active' : '' }}"
+                  data-label="Giao việc">
+                  <i class="bi bi-send-check me-2"></i>
+                  <span class="nav-label">Giao việc</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </li>
+        @endif
+
+        @if($isSupervisor)
+        <li>
+          <a class="nav-link d-flex justify-content-between align-items-center"
+            data-bs-toggle="collapse"
+            href="#mgmtMenuSupervisor"
+            role="button"
+            aria-expanded="{{ request()->is('management*') ? 'true' : 'false' }}"
+            aria-controls="mgmtMenuSupervisor"
+            data-label="Quản lý">
+            <span class="d-flex align-items-center gap-2">
+              <i class="bi bi-diagram-3"></i>
+              <span class="nav-label">Quản lý</span>
+            </span>
+            <i class="bi bi-chevron-down small mgmt-chevron"></i>
+          </a>
+
+          <div class="collapse mt-1 {{ request()->is('management*') ? 'show' : '' }}" id="mgmtMenuSupervisor">
+            <ul class="list-unstyled ps-3 mb-0">
+              <li>
+                <a href="/management/approval-center"
+                  class="nav-link py-1 {{ request()->is('management/approval-center') ? 'active' : '' }}"
+                  data-label="Approval Center">
+                  <i class="bi bi-check2-square me-2"></i>
+                  <span class="nav-label">Approval Center</span>
                 </a>
               </li>
               <li>

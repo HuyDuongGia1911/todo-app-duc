@@ -375,6 +375,7 @@ export default function AsyncDropdownSelect({
             id: `user-${u.id}`,
             label: u.name,
             value: u.name,
+            role: u.role || null,
             avatar: u.avatar
               ? `/storage/${u.avatar}`
               : "https://www.w3schools.com/howto/img_avatar.png",
@@ -399,6 +400,7 @@ export default function AsyncDropdownSelect({
             id: item[idKey] ?? item.id,
             value: item[vKey],
             label: item[lKey],
+            role: item.role ?? null,
             avatar: item.avatar ? `/storage/${item.avatar}` : undefined,
           }));
           setOptions(mapped);
@@ -554,19 +556,37 @@ export default function AsyncDropdownSelect({
     name === "assigners" ||
     name === "supervisors";
 
+  const restrictAdminRecipients =
+    name === "user_ids" &&
+    (
+      typeof window !== "undefined" && (window as any).currentUserRole
+        ? String((window as any).currentUserRole)
+        : ""
+    ).trim() === "Trưởng phòng";
+
+  const rawSelectedValues = multiple
+    ? (Array.isArray(value) ? value.map((v) => String(v)) : [])
+    : value !== undefined && value !== null && value !== ""
+      ? [String(value)]
+      : [];
+
+  const optionsForSelect = restrictAdminRecipients
+    ? options.filter(
+        (opt) => opt.role !== "Admin" || rawSelectedValues.includes(String(opt.value))
+      )
+    : options;
+
   // option đang chọn (single vs multiple)
   let selectedOption: any = null;
 
   if (multiple) {
-    const arr = Array.isArray(value) ? value.map((v) => String(v)) : [];
-    selectedOption = options.filter((opt) =>
-      arr.includes(String(opt.value))
+    selectedOption = optionsForSelect.filter((opt) =>
+      rawSelectedValues.includes(String(opt.value))
     );
   } else {
-    selectedOption =
-      value !== undefined && value !== null && value !== ""
-        ? options.find((opt) => String(opt.value) === String(value)) || null
-        : null;
+    selectedOption = rawSelectedValues.length
+      ? optionsForSelect.find((opt) => String(opt.value) === rawSelectedValues[0]) || null
+      : null;
   }
 
   // được phép sửa/xoá?
@@ -589,7 +609,7 @@ export default function AsyncDropdownSelect({
               value={selectedOption}
               onChange={handleChange}
               onCreateOption={creatable ? handleCreate : undefined}
-              options={options}
+              options={optionsForSelect}
               isMulti={multiple}              // ⭐ multiple
               isDisabled={disabled}           // ⭐ disable
               isClearable={!multiple}
