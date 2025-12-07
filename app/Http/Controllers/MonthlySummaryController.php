@@ -64,7 +64,7 @@ class MonthlySummaryController extends Controller
         return response()->json($summary, 201);
     }
 
-    public function show(MonthlySummary $summary)
+    public function show(Request $request, MonthlySummary $summary)
     {
         $this->authorizeOwner($summary);
 
@@ -107,7 +107,7 @@ class MonthlySummaryController extends Controller
             ->values()
             ->toArray();
 
-        return response()->json([
+        $payload = [
             'id' => $summary->id,
             'month' => $summary->month,
             'title' => $summary->title,
@@ -116,7 +116,13 @@ class MonthlySummaryController extends Controller
             'tasks_cache' => $summary->tasks_cache,
             'stats' => $summary->stats,
             'kpis' => $kpis,
-        ]);
+        ];
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json($payload);
+        }
+
+        return view('summaries.show', ['summary' => $payload]);
     }
 
 

@@ -36,4 +36,9 @@ class KPI extends Model
     {
         return $this->hasMany(KPITask::class, 'kpi_id');
     }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

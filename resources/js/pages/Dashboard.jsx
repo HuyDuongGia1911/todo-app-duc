@@ -75,6 +75,13 @@ export default function Dashboard({ userName, taskCount, dashboardData }) {
   });
   const [detailModal, setDetailModal] = useState({ open: false, filter: null });
 
+  const buildTaskLink = (task) => {
+    if (task?.id) {
+      return `/tasks?highlight_task=${task.id}`;
+    }
+    return task?.url || '/tasks';
+  };
+
   const greeting = useMemo(() => `Chào ${getSession()}, ${userName}`, [userName]);
   const todayLabel = useMemo(() => formatVietnamDate(), []);
 
@@ -128,7 +135,7 @@ export default function Dashboard({ userName, taskCount, dashboardData }) {
               <p className="dashboard-task-list__title">{task.title}</p>
               <small className="text-muted">Ngày làm: {task.task_date || '—'} · Deadline: {task.deadline_at || '—'}</small>
             </div>
-            <a href={task.url} className="btn btn-sm btn-outline-primary">Chi tiết</a>
+            <a href={buildTaskLink(task)} className="btn btn-sm btn-outline-primary">Xem</a>
           </li>
         ))}
       </ul>
@@ -160,7 +167,7 @@ export default function Dashboard({ userName, taskCount, dashboardData }) {
                 <span className="badge bg-light text-dark me-2">{task.status}</span>
                 <span className="badge bg-secondary">{task.priority || 'Không rõ'}</span>
               </div>
-              <a href={task.url} className="btn btn-sm btn-outline-primary">Chi tiết</a>
+              <a href={buildTaskLink(task)} className="btn btn-sm btn-outline-primary">Xem</a>
             </div>
           </li>
         ))}

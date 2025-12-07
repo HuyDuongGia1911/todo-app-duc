@@ -4,6 +4,12 @@ import { Button, Card, Form, Modal, Spinner } from 'react-bootstrap';
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected';
 
+interface ProposalRecipient {
+  id: number;
+  name: string;
+  role?: string;
+}
+
 interface Proposal {
   id: number;
   type: 'task' | 'kpi';
@@ -21,6 +27,7 @@ interface Proposal {
   created_at?: string | null;
   reviewer?: { id: number; name: string } | null;
   user?: { id: number; name: string; avatar?: string | null } | null;
+  recipients?: ProposalRecipient[];
 }
 
 interface ProposalCounts {
@@ -178,6 +185,7 @@ export default function ManagementProposalsPage() {
                     <th>Tiêu đề</th>
                     <th>Loại</th>
                     <th>Người gửi</th>
+                    <th>Người nhận</th>
                     <th>Chi tiết</th>
                     <th>Trạng thái</th>
                     <th className="text-end">Thao tác</th>
@@ -193,6 +201,19 @@ export default function ManagementProposalsPage() {
                       <td>{proposal.type === 'task' ? 'Công việc' : 'KPI'}</td>
                       <td>
                         <div className="fw-semibold">{proposal.user?.name || '—'}</div>
+                      </td>
+                      <td>
+                        {proposal.recipients?.length ? (
+                          <div className="d-flex flex-wrap gap-1">
+                            {proposal.recipients.map(recipient => (
+                              <span key={recipient.id} className="badge bg-light text-dark border">
+                                {recipient.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted small">—</span>
+                        )}
                       </td>
                       <td>
                         {proposal.priority && <div>Ưu tiên: {proposal.priority}</div>}
@@ -270,6 +291,21 @@ export default function ManagementProposalsPage() {
           <h5>{modalProposal?.title}</h5>
           <p className="text-muted">Loại: {modalProposal?.type === 'task' ? 'Công việc' : 'KPI'}</p>
           <p>{modalProposal?.description || 'Không có mô tả.'}</p>
+          <div className="mb-3">
+            <div className="fw-semibold">Người nhận</div>
+            {modalProposal?.recipients?.length ? (
+              <div className="d-flex flex-wrap gap-2 mt-1">
+                {modalProposal.recipients.map(recipient => (
+                  <span key={recipient.id} className="badge bg-light text-dark border">
+                    {recipient.name}
+                    {recipient.role ? <span className="text-muted"> ({recipient.role})</span> : null}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="text-muted">—</span>
+            )}
+          </div>
           {modalProposal?.attachments?.length ? (
             <div>
               <div className="fw-semibold">Đính kèm:</div>

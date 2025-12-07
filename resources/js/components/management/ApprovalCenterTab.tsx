@@ -372,7 +372,7 @@ export default function ApprovalCenterTab() {
           <Button variant="outline-secondary" size="sm" onClick={fetchProposals} disabled={proposalLoading}>
             {proposalLoading ? 'Đang tải...' : 'Làm mới'}
           </Button>
-          <Button variant="link" size="sm" href="/management/proposals" target="_blank" rel="noreferrer">
+          <Button variant="link" size="sm" href="/management/proposals">
             Xem tất cả
           </Button>
         </div>
@@ -443,7 +443,7 @@ export default function ApprovalCenterTab() {
           <Button variant="outline-secondary" size="sm" onClick={fetchReports} disabled={reportLoading}>
             {reportLoading ? 'Đang tải...' : 'Làm mới'}
           </Button>
-          <Button variant="link" size="sm" href="/management/reports" target="_blank" rel="noreferrer">
+          <Button variant="link" size="sm" href="/management/reports">
             Xem tất cả
           </Button>
         </div>
@@ -682,7 +682,7 @@ export default function ApprovalCenterTab() {
     <div className="approval-center-tab">
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-          <h2 className="mb-1">Approval Center</h2>
+          <h2 className="mb-1">Trung tâm phê duyệt</h2>
           <p className="text-muted mb-0">Gom nhanh các thao tác duyệt đề xuất, gỡ chốt báo cáo và xử lý task nghẽn.</p>
         </div>
         <div className="d-flex gap-2">

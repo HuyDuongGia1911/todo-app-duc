@@ -404,9 +404,9 @@
               <li>
                 <a href="/management/approval-center"
                   class="nav-link py-1 {{ request()->is('management/approval-center') ? 'active' : '' }}"
-                  data-label="Approval Center">
+                  data-label="Trung tâm phê duyệt">
                   <i class="bi bi-check2-square me-2"></i>
-                  <span class="nav-label">Approval Center</span>
+                  <span class="nav-label">Trung tâm phê duyệt</span>
                 </a>
               </li>
               <li>
@@ -475,9 +475,9 @@
               <li>
                 <a href="/management/approval-center"
                   class="nav-link py-1 {{ request()->is('management/approval-center') ? 'active' : '' }}"
-                  data-label="Approval Center">
+                  data-label="Trung tâm phê duyệt">
                   <i class="bi bi-check2-square me-2"></i>
-                  <span class="nav-label">Approval Center</span>
+                  <span class="nav-label">Trung tâm phê duyệt</span>
                 </a>
               </li>
               <li>

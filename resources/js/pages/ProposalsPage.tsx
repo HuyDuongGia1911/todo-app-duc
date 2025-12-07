@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Button, Card, Form, Spinner } from 'react-bootstrap';
+import Swal from 'sweetalert2';
 
 interface Proposal {
   id: number;
@@ -16,12 +17,20 @@ interface Proposal {
   reviewed_at?: string | null;
   created_at?: string | null;
   user_read_at?: string | null;
+  recipients?: RecipientOption[];
 }
 
 interface Meta {
   current_page: number;
   last_page: number;
   total: number;
+}
+
+interface RecipientOption {
+  id: number;
+  name: string;
+  role: string;
+  avatar?: string | null;
 }
 
 const statusBadgeClass = (status: Proposal['status']) => {
@@ -55,6 +64,10 @@ export default function ProposalsPage() {
   const [form, setForm] = useState(defaultFormState);
   const [files, setFiles] = useState<FileList | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recipientOptions, setRecipientOptions] = useState<RecipientOption[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<number[]>([]);
+  const [recipientLoading, setRecipientLoading] = useState(false);
+  const [recipientError, setRecipientError] = useState<string | null>(null);
 
   const typeLabel = useMemo(() => (form.type === 'task' ? 'Công việc' : 'KPI'), [form.type]);
 
@@ -92,8 +105,34 @@ export default function ProposalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, page]);
 
+  useEffect(() => {
+    const fetchRecipients = async () => {
+      setRecipientLoading(true);
+      try {
+        const res = await axios.get<{ data: RecipientOption[] }>('/task-proposals/recipients');
+        setRecipientOptions(res.data?.data || []);
+        setRecipientError(null);
+      } catch (err) {
+        console.error(err);
+        setRecipientError('Không thể tải danh sách quản lý phê duyệt.');
+      } finally {
+        setRecipientLoading(false);
+      }
+    };
+
+    fetchRecipients();
+  }, []);
+
+  const toggleRecipient = (id: number) => {
+    setSelectedRecipients(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (selectedRecipients.length === 0) {
+      Swal.fire('Thiếu người nhận', 'Vui lòng chọn ít nhất một quản lý nhận đề xuất.', 'info');
+      return;
+    }
     setSubmitting(true);
     const payload = new FormData();
     payload.append('type', form.type);
@@ -110,6 +149,7 @@ export default function ProposalsPage() {
     if (files) {
       Array.from(files).forEach(file => payload.append('attachments[]', file));
     }
+    selectedRecipients.forEach(id => payload.append('recipient_ids[]', String(id)));
 
     try {
       await axios.post('/task-proposals', payload, {
@@ -117,6 +157,7 @@ export default function ProposalsPage() {
       });
       setForm(defaultFormState);
       setFiles(null);
+      setSelectedRecipients([]);
       await fetchProposals();
     } catch (err) {
       console.error(err);
@@ -128,16 +169,35 @@ export default function ProposalsPage() {
 
   const handleDelete = async (proposal: Proposal) => {
     if (proposal.status !== 'pending') {
-      alert('Chỉ có thể xoá đề xuất đang chờ duyệt.');
+      Swal.fire('Không thể xoá', 'Chỉ xoá được đề xuất đang chờ duyệt.', 'info');
       return;
     }
-    if (!confirm('Xoá đề xuất này?')) return;
+
+    const confirmRes = await Swal.fire({
+      title: 'Xoá đề xuất?',
+      text: 'Hành động này không thể hoàn tác.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Xoá',
+      cancelButtonText: 'Huỷ',
+      confirmButtonColor: '#dc3545',
+      reverseButtons: true,
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
     try {
       await axios.delete(`/task-proposals/${proposal.id}`);
       setProposals(prev => prev.filter(p => p.id !== proposal.id));
+      Swal.fire({
+        title: 'Đã xoá đề xuất',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } catch (err) {
       console.error(err);
-      alert('Không thể xoá đề xuất.');
+      Swal.fire('Lỗi', 'Không thể xoá đề xuất.', 'error');
     }
   };
 
@@ -153,7 +213,7 @@ export default function ProposalsPage() {
     }
   };
 
-  const canSubmit = form.title.trim().length > 0 && (!submitting);
+  const canSubmit = form.title.trim().length > 0 && selectedRecipients.length > 0 && !submitting;
 
   return (
     <div className="container py-3">
@@ -263,6 +323,31 @@ export default function ProposalsPage() {
                   </div>
                 </>
               )}
+              <div className="col-12">
+                <Form.Label>Người nhận đề xuất *</Form.Label>
+                {recipientLoading ? (
+                  <div className="text-muted">Đang tải danh sách quản lý...</div>
+                ) : recipientError ? (
+                  <div className="alert alert-danger py-2 mb-0">{recipientError}</div>
+                ) : recipientOptions.length === 0 ? (
+                  <div className="alert alert-warning py-2 mb-0">Chưa có quản lý nào khả dụng để nhận đề xuất.</div>
+                ) : (
+                  <div className="row row-cols-1 row-cols-md-2 g-2">
+                    {recipientOptions.map(option => (
+                      <div key={option.id} className="col">
+                        <Form.Check
+                          id={`recipient-${option.id}`}
+                          type="checkbox"
+                          label={`${option.name} (${option.role})`}
+                          checked={selectedRecipients.includes(option.id)}
+                          onChange={() => toggleRecipient(option.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="form-text">Có thể chọn nhiều quản lý (ví dụ trưởng phòng và ban giám đốc).</div>
+              </div>
               <div className="col-md-6">
                 <Form.Label>Đính kèm (tuỳ chọn)</Form.Label>
                 <Form.Control
@@ -328,6 +413,9 @@ export default function ProposalsPage() {
                         )}
                         {proposal.kpi_target && <div>Chỉ tiêu: {proposal.kpi_target}</div>}
                         {proposal.priority && <div>Ưu tiên: {proposal.priority}</div>}
+                        {proposal.recipients?.length ? (
+                          <div>Gửi tới: {proposal.recipients.map(recipient => recipient.name).join(', ')}</div>
+                        ) : null}
                       </td>
                       <td>
                         <span className={statusBadgeClass(proposal.status)}>

@@ -41,7 +41,7 @@ function ManagementIndex() {
           <button className={`nav-link ${tab === 'assign' ? 'active' : ''}`} onClick={() => setTab('assign')}>Giao việc</button>
         </li>
         <li className="nav-item">
-          <button className={`nav-link ${tab === 'approval' ? 'active' : ''}`} onClick={() => setTab('approval')}>Approval Center</button>
+          <button className={`nav-link ${tab === 'approval' ? 'active' : ''}`} onClick={() => setTab('approval')}>Trung tâm phê duyệt</button>
         </li>
       </ul>
 

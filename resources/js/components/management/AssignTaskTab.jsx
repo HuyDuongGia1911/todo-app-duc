@@ -33,6 +33,7 @@ export default function AssignTaskTab() {
     status: "Chưa hoàn thành",
     newUserName: "",     // ✅ tạo user nhanh
   });
+  const [attachments, setAttachments] = useState([]);
 
   const [filters, setFilters] = useState({
     user_id: null,
@@ -107,6 +108,18 @@ export default function AssignTaskTab() {
     setCurrentPage(1);
   };
 
+  const handleAttachmentChange = (event) => {
+    const files = Array.from(event.target.files || []);
+    setAttachments(files);
+    if (event.target) {
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = (idx) => {
+    setAttachments(prev => prev.filter((_, index) => index !== idx));
+  };
+
   const handleCreateUser = async () => {
     const name = form.newUserName.trim();
     if (!name) return Swal.fire("Thiếu tên", "Nhập tên người dùng mới", "warning");
@@ -152,17 +165,28 @@ export default function AssignTaskTab() {
     if (!form.task_date) return Swal.fire("Thiếu", "Vui lòng chọn Ngày", "warning");
     if (!form.user_ids.length) return Swal.fire("Thiếu", "Vui lòng chọn ít nhất 1 người nhận", "warning");
 
-    const payload = {
-      ...form,
-      progress: form.progress === "" ? null : Math.max(0, Math.min(100, Number(form.progress))),
-      deadline_at: form.deadline_at || form.task_date,
-    };
+    const normalizedProgress = form.progress === "" ? null : Math.max(0, Math.min(100, Number(form.progress)));
+    const formData = new FormData();
+    form.user_ids.forEach(id => formData.append('user_ids[]', String(id)));
+    formData.append('task_date', form.task_date);
+    formData.append('deadline_at', form.deadline_at || form.task_date);
+    formData.append('title', form.title);
+    formData.append('status', form.status);
+    if (form.shift) formData.append('shift', form.shift);
+    if (form.type) formData.append('type', form.type);
+    if (form.supervisor) formData.append('supervisor', form.supervisor);
+    if (form.priority) formData.append('priority', form.priority);
+    if (normalizedProgress !== null) formData.append('progress', String(normalizedProgress));
+    if (form.detail) formData.append('detail', form.detail);
+    const trimmedLink = form.file_link.trim();
+    if (trimmedLink) formData.append('file_link', trimmedLink);
+    attachments.forEach(file => formData.append('attachments[]', file));
 
     try {
       const res = await fetch("/management/assign/tasks", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrf, Accept: "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "X-CSRF-TOKEN": csrf, Accept: "application/json" },
+        body: formData,
       });
       if (!res.ok) {
         const t = await res.text();
@@ -185,6 +209,7 @@ export default function AssignTaskTab() {
         user_ids: [],
         newUserName: "",
       }));
+      setAttachments([]);
       Swal.fire("Thành công", "Đã giao việc", "success");
     } catch (e) {
       Swal.fire("Lỗi", "Không thể giao việc", "error");
@@ -356,6 +381,26 @@ export default function AssignTaskTab() {
               <Form.Control placeholder="https://..., https://..."
                 value={form.file_link}
                 onChange={e => setForm(prev => ({ ...prev, file_link: e.target.value }))} />
+            </Col>
+
+            <Col md={6}>
+              <Form.Label>Tệp đính kèm</Form.Label>
+              <Form.Control
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png"
+                onChange={handleAttachmentChange}
+              />
+              {attachments.length > 0 && (
+                <div className="mt-2 small">
+                  {attachments.map((file, idx) => (
+                    <div key={`${file.name}-${idx}`} className="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">
+                      <span className="text-truncate" style={{ maxWidth: '75%' }}>{file.name}</span>
+                      <Button variant="link" size="sm" onClick={() => handleRemoveAttachment(idx)}>Xoá</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Col>
 
             <Col md={12}>

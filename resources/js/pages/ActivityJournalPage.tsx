@@ -1,6 +1,10 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Button, Form, Spinner } from 'react-bootstrap';
+import DatePicker from 'react-datepicker';
+import { vi } from 'date-fns/locale';
+import 'react-datepicker/dist/react-datepicker.css';
+import Swal from 'sweetalert2';
 
 interface AttachmentMeta {
   name: string;
@@ -26,13 +30,26 @@ interface Meta {
 }
 
 const nowLocal = () => new Date().toISOString().slice(0, 16);
+const parseMonthValue = (value: string) => {
+  const [year, month] = value?.split('-').map(Number) ?? [];
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    return new Date();
+  }
+  return new Date(year, (month ?? 1) - 1, 1);
+};
+const formatMonthValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
 
 export default function ActivityJournalPage() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [meta, setMeta] = useState<Meta>({ current_page: 1, last_page: 1, total: 0 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [filters, setFilters] = useState({ month: new Date().toISOString().slice(0, 7), keyword: '' });
+  const [filters, setFilters] = useState(() => ({ month: new Date().toISOString().slice(0, 7), keyword: '' }));
+  const [monthPickerDate, setMonthPickerDate] = useState<Date>(() => parseMonthValue(new Date().toISOString().slice(0, 7)));
   const [page, setPage] = useState(1);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -48,6 +65,10 @@ export default function ActivityJournalPage() {
     loadLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, page]);
+
+  useEffect(() => {
+    setMonthPickerDate(parseMonthValue(filters.month));
+  }, [filters.month]);
 
   const loadLogs = async () => {
     setLoading(true);
@@ -103,14 +124,30 @@ export default function ActivityJournalPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Xoá ghi chép này?')) return;
+    const confirmResult = await Swal.fire({
+      title: 'Xoá ghi chép? ',
+      text: 'Hành động này không thể hoàn tác.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Xoá',
+      cancelButtonText: 'Huỷ',
+      reverseButtons: true,
+      confirmButtonColor: '#dc3545'
+    });
+    if (!confirmResult.isConfirmed) return;
     try {
       await axios.delete(`/activity-logs/${id}`);
       setLogs(prev => prev.filter(log => log.id !== id));
       setMeta(meta => ({ ...meta, total: Math.max(0, meta.total - 1) }));
+      Swal.fire({
+        title: 'Đã xoá',
+        icon: 'success',
+        timer: 1600,
+        showConfirmButton: false
+      });
     } catch (err) {
       console.error(err);
-      alert('Không thể xoá ghi chép.');
+      Swal.fire('Lỗi', 'Không thể xoá ghi chép.', 'error');
     }
   };
 
@@ -132,6 +169,10 @@ export default function ActivityJournalPage() {
   const canSubmit = form.title.trim().length > 0 && !saving;
 
   const monthLabel = useMemo(() => new Date(`${filters.month}-01`).toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' }), [filters.month]);
+  const handleMonthChange = (date: Date | null) => {
+    if (!date) return;
+    setFilters(prev => ({ ...prev, month: formatMonthValue(date) }));
+  };
 
   return (
     <div className="activity-journal-page">
@@ -142,23 +183,16 @@ export default function ActivityJournalPage() {
               <h3 className="mb-1">Nhật ký hoạt động</h3>
               <p className="text-muted mb-0">Ghi chú nhanh, đính kèm bằng chứng và tự động chèn vào báo cáo tháng.</p>
             </div>
-            <div className="text-end">
-              <Form.Select
-                value={filters.month}
-                onChange={(e) => setFilters(prev => ({ ...prev, month: e.target.value }))}
-                style={{ width: 160 }}
-              >
-                {Array.from({ length: 12 }).map((_, idx) => {
-                  const date = new Date();
-                  date.setMonth(date.getMonth() - idx);
-                  const value = date.toISOString().slice(0, 7);
-                  return (
-                    <option key={value} value={value}>
-                      {date.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
-                    </option>
-                  );
-                })}
-              </Form.Select>
+            <div className="text-end" style={{ minWidth: 200 }}>
+              <DatePicker
+                selected={monthPickerDate}
+                onChange={handleMonthChange}
+                dateFormat="MMMM yyyy"
+                showMonthYearPicker
+                locale={vi}
+                className="form-control"
+                calendarStartDay={1}
+              />
             </div>
           </div>
 

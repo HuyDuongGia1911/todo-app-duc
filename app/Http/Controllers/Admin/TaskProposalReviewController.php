@@ -19,8 +19,14 @@ class TaskProposalReviewController extends Controller
         $this->ensureManager();
 
         $perPage = max(5, min((int) $request->get('per_page', 20), 100));
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+        $isAdmin = $user?->role === 'Admin';
 
-        $query = TaskProposal::with(['user:id,name,avatar', 'reviewer:id,name,avatar'])
+        $baseQuery = TaskProposal::query()
+            ->when(!$isAdmin, fn($q) => $q->whereHas('recipients', fn($recipientQuery) => $recipientQuery->where('users.id', $user->id)))
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->get('status')))
             ->when($request->filled('type'), fn($q) => $q->where('type', $request->get('type')))
             ->when($request->filled('keyword'), function ($q) use ($request) {
@@ -30,18 +36,21 @@ class TaskProposalReviewController extends Controller
                         ->orWhere('description', 'like', "%{$keyword}%")
                         ->orWhereHas('user', fn($userQuery) => $userQuery->where('name', 'like', "%{$keyword}%"));
                 });
-            })
-            ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected')")
-            ->orderByDesc('created_at');
+            });
 
-        $paginator = $query->paginate($perPage);
+        $stats = (clone $baseQuery)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $paginator = $baseQuery
+            ->with(['user:id,name,avatar', 'reviewer:id,name,avatar', 'recipients:id,name,avatar,role'])
+            ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected')")
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
         $items = collect($paginator->items())
             ->map(fn($proposal) => $this->transform($proposal))
             ->all();
-
-        $stats = TaskProposal::selectRaw('status, COUNT(*) as total')
-            ->groupBy('status')
-            ->pluck('total', 'status');
 
         return response()->json([
             'data' => $items,
@@ -72,6 +81,7 @@ class TaskProposalReviewController extends Controller
     private function handleDecision(Request $request, TaskProposal $proposal, string $status)
     {
         $this->ensureManager();
+        $this->authorizeReviewer($proposal);
 
         if ($proposal->status !== 'pending') {
             return response()->json([
@@ -147,6 +157,23 @@ class TaskProposalReviewController extends Controller
         }
     }
 
+    private function authorizeReviewer(TaskProposal $proposal): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+
+        if ($user->role === 'Admin') {
+            return;
+        }
+
+        $isRecipient = $proposal->recipients()->where('users.id', $user->id)->exists();
+        if (!$isRecipient) {
+            abort(403);
+        }
+    }
+
     private function transform(TaskProposal $proposal): array
     {
         $attachments = collect($proposal->attachments ?? [])->map(function ($file) {
@@ -155,6 +182,13 @@ class TaskProposalReviewController extends Controller
             }
             return $file;
         })->all();
+
+        $recipients = $proposal->recipients->map(fn($recipient) => [
+            'id' => $recipient->id,
+            'name' => $recipient->name,
+            'avatar' => $recipient->avatar,
+            'role' => $recipient->role,
+        ])->all();
 
         return [
             'id' => $proposal->id,
@@ -174,6 +208,7 @@ class TaskProposalReviewController extends Controller
             'linked_task_id' => $proposal->linked_task_id,
             'linked_kpi_id' => $proposal->linked_kpi_id,
             'created_at' => optional($proposal->created_at)->toIso8601String(),
+            'recipients' => $recipients,
         ];
     }
 }

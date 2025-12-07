@@ -97,6 +97,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('task-proposals')->group(function () {
         Route::get('/', [TaskProposalController::class, 'index']);
         Route::post('/', [TaskProposalController::class, 'store']);
+        Route::get('/recipients', [TaskProposalController::class, 'recipients']);
         Route::get('/{taskProposal}', [TaskProposalController::class, 'show']);
         Route::delete('/{taskProposal}', [TaskProposalController::class, 'destroy']);
         Route::post('/{taskProposal}/mark-read', [TaskProposalController::class, 'markAsRead']);

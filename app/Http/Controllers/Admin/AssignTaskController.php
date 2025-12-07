@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class AssignTaskController extends Controller
 {
@@ -16,7 +17,8 @@ class AssignTaskController extends Controller
         $q = Task::query()->with([
             'user:id,name,email',          // legacy 1-1
             'users:id,name,email',         // many-to-many mới
-            'assignedByUser:id,name,email'
+            'assignedByUser:id,name,email',
+            'files:id,task_id,original_name,mime_type,size'
         ]);
 
         // lọc theo người nhận (ưu tiên many-to-many, vẫn fallback legacy)
@@ -86,11 +88,13 @@ class AssignTaskController extends Controller
             }
             $task->users()->sync($syncData);
 
+            $this->syncAttachments($request, $task);
+
             return $task;
         });
 
         return response()->json(
-            $task->load(['user:id,name,email', 'users:id,name,email', 'assignedByUser:id,name,email']),
+            $task->load(['user:id,name,email', 'users:id,name,email', 'assignedByUser:id,name,email', 'files']),
             201
         );
     }
@@ -120,10 +124,12 @@ class AssignTaskController extends Controller
             if (!is_null($assignees)) {
                 $task->users()->sync($assignees); // [] = bỏ hết người nhận
             }
+
+            $this->syncAttachments($request, $task);
         });
 
         return response()->json(
-            $task->load(['user:id,name,email', 'users:id,name,email', 'assignedByUser:id,name,email'])
+            $task->load(['user:id,name,email', 'users:id,name,email', 'assignedByUser:id,name,email', 'files'])
         );
     }
 
@@ -149,6 +155,9 @@ class AssignTaskController extends Controller
             'detail'      => ['nullable', 'string'],
             'file_link'   => ['nullable', 'string'],
             'deadline_at' => ['nullable', 'date'],
+            'attachments.*' => ['file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,txt,jpg,jpeg,png'],
+            'remove_attachment_ids' => ['nullable', 'array'],
+            'remove_attachment_ids.*' => ['integer'],
         ];
 
         $rules['status'] = $isCreate
@@ -186,5 +195,37 @@ class AssignTaskController extends Controller
             ->where('role', 'Admin')
             ->pluck('name')
             ->all();
+    }
+
+    private function syncAttachments(Request $request, Task $task): void
+    {
+        foreach ((array) $request->file('attachments') as $uploadedFile) {
+            if (!$uploadedFile) {
+                continue;
+            }
+
+            $path = $uploadedFile->store('task-files', 'public');
+
+            $task->files()->create([
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'path'          => $path,
+                'mime_type'     => $uploadedFile->getClientMimeType(),
+                'size'          => $uploadedFile->getSize(),
+            ]);
+        }
+
+        $removalIds = array_filter((array) $request->input('remove_attachment_ids', []));
+        if (empty($removalIds)) {
+            return;
+        }
+
+        $files = $task->files()->whereIn('id', $removalIds)->get();
+
+        foreach ($files as $file) {
+            if ($file->path) {
+                Storage::disk('public')->delete($file->path);
+            }
+            $file->delete();
+        }
     }
 }

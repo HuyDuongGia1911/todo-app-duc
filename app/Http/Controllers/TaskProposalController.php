@@ -7,8 +7,10 @@ use App\Models\User;
 use App\Notifications\TaskProposalSubmitted;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class TaskProposalController extends Controller
 {
@@ -17,7 +19,7 @@ class TaskProposalController extends Controller
         $userId = Auth::id();
         $perPage = max(5, min((int) $request->get('per_page', 15), 100));
 
-        $query = TaskProposal::with(['reviewer:id,name,avatar'])
+        $query = TaskProposal::with(['reviewer:id,name,avatar', 'recipients:id,name,avatar,role'])
             ->where('user_id', $userId)
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->get('status')))
             ->when($request->filled('type'), fn($q) => $q->where('type', $request->get('type')))
@@ -48,13 +50,21 @@ class TaskProposalController extends Controller
     {
         $payload = $this->validatePayload($request);
         $payload['user_id'] = Auth::id();
+        $recipientIds = array_unique($payload['recipient_ids']);
+        unset($payload['recipient_ids']);
 
         $attachments = $this->handleAttachments($request);
         if (!empty($attachments)) {
             $payload['attachments'] = $attachments;
         }
 
-        $proposal = TaskProposal::create($payload)->load(['reviewer', 'user']);
+        $proposal = DB::transaction(function () use ($payload, $recipientIds) {
+            $proposal = TaskProposal::create($payload);
+            $proposal->recipients()->sync($recipientIds);
+
+            return $proposal->load(['reviewer:id,name,avatar', 'user:id,name,avatar', 'recipients:id,name,avatar,role']);
+        });
+
         $this->notifyManagers($proposal);
 
         return response()->json($this->transformProposal($proposal), 201);
@@ -63,7 +73,7 @@ class TaskProposalController extends Controller
     public function show(TaskProposal $taskProposal)
     {
         $this->authorizeAccess($taskProposal);
-        return response()->json($this->transformProposal($taskProposal->load(['reviewer'])));
+        return response()->json($this->transformProposal($taskProposal->load(['reviewer', 'recipients:id,name,avatar,role'])));
     }
 
     public function destroy(TaskProposal $taskProposal)
@@ -92,8 +102,29 @@ class TaskProposalController extends Controller
         ]);
     }
 
+    public function recipients()
+    {
+        $currentUserId = Auth::id();
+
+        $managersQuery = User::query()
+            ->whereIn('role', ['Admin', 'Trưởng phòng'])
+            ->orderByRaw("FIELD(role, 'Trưởng phòng', 'Admin')")
+            ->orderBy('name')
+            ->select(['id', 'name', 'role', 'avatar']);
+
+        if ($currentUserId) {
+            $managersQuery->where('id', '!=', $currentUserId);
+        }
+
+        $managers = $managersQuery->get();
+
+        return response()->json(['data' => $managers]);
+    }
+
     private function validatePayload(Request $request): array
     {
+        $notInRule = Auth::id() ? Rule::notIn([Auth::id()]) : null;
+
         $rules = [
             'type' => 'required|in:task,kpi',
             'title' => 'required|string|max:255',
@@ -103,6 +134,13 @@ class TaskProposalController extends Controller
             'kpi_month' => 'nullable|date_format:Y-m',
             'kpi_target' => 'nullable|integer|min:0|max:100000',
             'attachments.*' => 'file|max:10240',
+            'recipient_ids' => 'required|array|min:1',
+            'recipient_ids.*' => array_filter([
+                'integer',
+                'distinct',
+                Rule::exists('users', 'id')->where(fn($q) => $q->whereIn('role', ['Admin', 'Trưởng phòng'])),
+                $notInRule,
+            ]),
         ];
 
         if ($request->input('type') === 'kpi') {
@@ -151,15 +189,13 @@ class TaskProposalController extends Controller
 
     private function notifyManagers(TaskProposal $proposal): void
     {
-        $managers = User::whereIn('role', ['Admin', 'Trưởng phòng'])
-            ->where('id', '!=', $proposal->user_id)
-            ->get();
+        $recipients = $proposal->recipients;
 
-        if ($managers->isEmpty()) {
+        if ($recipients->isEmpty()) {
             return;
         }
 
-        Notification::send($managers, new TaskProposalSubmitted($proposal));
+        Notification::send($recipients, new TaskProposalSubmitted($proposal));
     }
 
     private function authorizeAccess(TaskProposal $proposal): void
@@ -188,6 +224,13 @@ class TaskProposalController extends Controller
             return $file;
         })->all();
 
+        $recipients = $proposal->recipients->map(fn($recipient) => [
+            'id' => $recipient->id,
+            'name' => $recipient->name,
+            'avatar' => $recipient->avatar,
+            'role' => $recipient->role,
+        ])->all();
+
         return [
             'id' => $proposal->id,
             'type' => $proposal->type,
@@ -206,6 +249,7 @@ class TaskProposalController extends Controller
             'linked_kpi_id' => $proposal->linked_kpi_id,
             'user_read_at' => optional($proposal->user_read_at)->toIso8601String(),
             'created_at' => optional($proposal->created_at)->toIso8601String(),
+            'recipients' => $recipients,
         ];
     }
 }

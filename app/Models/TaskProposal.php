@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class TaskProposal extends Model
 {
@@ -41,6 +42,11 @@ class TaskProposal extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function recipients(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'task_proposal_recipient')->withTimestamps();
     }
 
     public function linkedTask(): BelongsTo
