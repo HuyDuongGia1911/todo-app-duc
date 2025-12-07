@@ -158,11 +158,20 @@ export default function SummaryIndex() {
 
   const handleOpenSummary = async (id) => {
     try {
-      await fetch(`/summaries/${id}/regenerate`, {
+      const regenRes = await fetch(`/summaries/${id}/regenerate`, {
         method: 'POST',
-        headers: { 'X-CSRF-TOKEN': csrf },
+        headers: {
+          'X-CSRF-TOKEN': csrf,
+          Accept: 'application/json',
+        },
       });
-      const res = await fetch(`/summaries/${id}`);
+      if (!regenRes.ok) throw new Error('regenerate_failed');
+
+      const res = await fetch(`/summaries/${id}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) throw new Error('fetch_failed');
+
       const data = await res.json();
       setViewing(data);
     } catch {

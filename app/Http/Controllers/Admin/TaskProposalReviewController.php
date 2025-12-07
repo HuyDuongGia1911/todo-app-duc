@@ -27,7 +27,6 @@ class TaskProposalReviewController extends Controller
 
         $baseQuery = TaskProposal::query()
             ->when(!$isAdmin, fn($q) => $q->whereHas('recipients', fn($recipientQuery) => $recipientQuery->where('users.id', $user->id)))
-            ->when($request->filled('status'), fn($q) => $q->where('status', $request->get('status')))
             ->when($request->filled('type'), fn($q) => $q->where('type', $request->get('type')))
             ->when($request->filled('keyword'), function ($q) use ($request) {
                 $keyword = $request->get('keyword');
@@ -43,7 +42,10 @@ class TaskProposalReviewController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $paginator = $baseQuery
+        $filteredQuery = (clone $baseQuery)
+            ->when($request->filled('status'), fn($q) => $q->where('status', $request->get('status')));
+
+        $paginator = $filteredQuery
             ->with(['user:id,name,avatar', 'reviewer:id,name,avatar', 'recipients:id,name,avatar,role'])
             ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected')")
             ->orderByDesc('created_at')

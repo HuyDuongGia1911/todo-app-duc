@@ -514,7 +514,7 @@ export default function ApprovalCenterTab() {
           <Button variant="outline-secondary" size="sm" onClick={fetchSnapshot} disabled={snapshotLoading}>
             {snapshotLoading ? 'Đang tải...' : 'Làm mới'}
           </Button>
-          <Button variant="link" size="sm" href="/management/kpi-health" target="_blank" rel="noreferrer">
+          <Button variant="link" size="sm" href="/management/kpi-health">
             Mở KPI Health
           </Button>
         </div>
