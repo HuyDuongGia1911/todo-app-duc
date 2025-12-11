@@ -2,6 +2,16 @@
 import React, { useEffect, useState } from "react";
 import Swal from "sweetalert2";
 
+const sortKpisByMonth = (list = []) => {
+  const normalizeDate = (item) => {
+    const raw = item?.start_date || item?.month || '';
+    const date = raw ? new Date(raw) : null;
+    return date && !Number.isNaN(date.getTime()) ? date : new Date(0);
+  };
+
+  return [...list].sort((a, b) => normalizeDate(b) - normalizeDate(a));
+};
+
 export default function KpiTab() {
   const [kpis, setKpis] = useState([]);
   const [users, setUsers] = useState([]);
@@ -35,7 +45,7 @@ export default function KpiTab() {
     try {
       const data = await fetchJson("/management/kpis/data");
       const list = Array.isArray(data) ? data : Array.isArray(data?.kpis) ? data.kpis : [];
-      setKpis(list);
+      setKpis(sortKpisByMonth(list));
     } catch {
       Swal.fire("Lỗi", "Không tải được danh sách KPI", "error");
     } finally {
@@ -97,10 +107,10 @@ export default function KpiTab() {
       });
 
       if (editing) {
-        setKpis((prev) => prev.map((k) => (k.id === kpi.id ? kpi : k)));
+        setKpis((prev) => sortKpisByMonth(prev.map((k) => (k.id === kpi.id ? kpi : k))));
         Swal.fire("Thành công", "Đã cập nhật KPI", "success");
       } else {
-        setKpis((prev) => [kpi, ...prev]);
+        setKpis((prev) => sortKpisByMonth([kpi, ...prev]));
         Swal.fire("Thành công", "Đã tạo KPI", "success");
       }
       resetForm();
