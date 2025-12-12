@@ -53,6 +53,8 @@ const notificationTabs = [
   { key: 'unread', label: 'Chưa đọc' },
 ];
 
+const BROADCAST_EVENT = 'notifications:refresh';
+
 const transformSystemNotification = (raw, role) => {
   const data = raw?.data || {};
   const base = {
@@ -106,6 +108,7 @@ export default function NotificationsPage() {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
   const fetchUrl = '/api/tasks/latest-assignments';
   const currentUserRole = window.currentUserRole || '';
+  const broadcastRefresh = () => window.dispatchEvent(new CustomEvent(BROADCAST_EVENT));
 
   const fetchNotifications = useCallback(
     async (isSilent = false) => {
@@ -144,7 +147,13 @@ export default function NotificationsPage() {
           transformSystemNotification(n, currentUserRole)
         );
 
-        setItems([...system, ...tasks]);
+        const combined = [...system, ...tasks].sort((a, b) => {
+          const aTime = new Date(a.assigned_at || a.created_at || 0).getTime();
+          const bTime = new Date(b.assigned_at || b.created_at || 0).getTime();
+          return bTime - aTime;
+        });
+
+        setItems(combined);
         setError(null);
       } catch (err) {
         console.warn('Không thể tải thông báo', err);
@@ -162,6 +171,17 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     fetchNotifications();
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const handler = () => fetchNotifications(true);
+    window.addEventListener(BROADCAST_EVENT, handler);
+    return () => window.removeEventListener(BROADCAST_EVENT, handler);
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => fetchNotifications(true), 60000);
+    return () => window.clearInterval(intervalId);
   }, [fetchNotifications]);
 
   const stats = useMemo(() => {
@@ -185,7 +205,7 @@ export default function NotificationsPage() {
       case 'priority':
         return items.filter(item => item.category === 'task' && item.type === 'deadline_alert');
       case 'assignments':
-        return items.filter(item => item.category === 'task');
+        return items.filter(item => item.category === 'task' && item.type !== 'deadline_alert');
       case 'system':
         return items.filter(item => item.category === 'system');
       case 'unread':
@@ -225,6 +245,8 @@ export default function NotificationsPage() {
       });
     } catch (err) {
       console.warn('Không thể đánh dấu đã đọc', err);
+    } finally {
+      broadcastRefresh();
     }
   };
 
@@ -249,6 +271,8 @@ export default function NotificationsPage() {
       });
     } catch (err) {
       console.warn('Không thể đánh dấu thông báo đã đọc', err);
+    } finally {
+      broadcastRefresh();
     }
   };
 
@@ -297,6 +321,7 @@ export default function NotificationsPage() {
         }),
       ]);
       setItems(prev => prev.map(item => (item.read_at ? item : { ...item, read_at: nowIso })));
+      broadcastRefresh();
     } catch (err) {
       console.warn('Không thể đánh dấu tất cả đã đọc', err);
     } finally {

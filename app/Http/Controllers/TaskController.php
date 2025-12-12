@@ -477,17 +477,21 @@ class TaskController extends Controller
             'tasks.status',
             'tasks.supervisor',
             'tasks.assigned_by',
-            'task_user.status as my_status',
-            'task_user.progress as my_progress',
-            'task_user.created_at as assigned_at',
+            DB::raw("COALESCE(task_user.status, tasks.status) as my_status"),
+            DB::raw("COALESCE(task_user.progress, tasks.progress) as my_progress"),
+            DB::raw("COALESCE(task_user.created_at, tasks.created_at) as assigned_at"),
             'task_user.read_at as read_at',
         ];
 
         $queryForUser = fn() => Task::query()
             ->select($baseSelect)
-            ->join('task_user', function ($join) use ($userId) {
+            ->leftJoin('task_user', function ($join) use ($userId) {
                 $join->on('task_user.task_id', '=', 'tasks.id')
                     ->where('task_user.user_id', '=', $userId);
+            })
+            ->where(function ($query) use ($userId) {
+                $query->where('tasks.user_id', $userId)
+                    ->orWhereNotNull('task_user.user_id');
             })
             ->with('assignedByUser:id,name,avatar');
 
@@ -646,7 +650,13 @@ class TaskController extends Controller
         $pivot = $task->users()->where('user_id', $userId)->first();
 
         if (!$pivot) {
-            return response()->json(['message' => 'Bạn không được giao task này'], 403);
+            if ($task->user_id !== $userId) {
+                return response()->json(['message' => 'Bạn không được giao task này'], 403);
+            }
+
+            $this->ensurePivotForUser($task, $userId, ['read_at' => now()]);
+
+            return response()->json(['success' => true]);
         }
 
         $task->users()->updateExistingPivot($userId, [
@@ -664,6 +674,15 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        $legacyTasks = Task::query()
+            ->where('user_id', $userId)
+            ->whereDoesntHave('users', fn($query) => $query->where('users.id', $userId))
+            ->get();
+
+        foreach ($legacyTasks as $legacyTask) {
+            $this->ensurePivotForUser($legacyTask, $userId, ['read_at' => now()]);
+        }
+
         $updated = DB::table('task_user')
             ->where('user_id', $userId)
             ->whereNull('read_at')
@@ -675,6 +694,18 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'updated' => $updated,
+        ]);
+    }
+
+    private function ensurePivotForUser(Task $task, int $userId, array $overrides = []): void
+    {
+        $defaults = [
+            'status'   => $task->status ?? 'Chưa hoàn thành',
+            'progress' => $task->status === 'Đã hoàn thành' ? 100 : ($task->progress ?? 0),
+        ];
+
+        $task->users()->syncWithoutDetaching([
+            $userId => array_merge($defaults, $overrides),
         ]);
     }
 

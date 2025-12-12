@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dropdown, Spinner } from 'react-bootstrap';
 import { FiBell, FiClock } from 'react-icons/fi';
 
@@ -104,69 +104,90 @@ export default function NotificationBell({
   const isNotificationsPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/notifications');
   const currentUserRole = (window as any)?.currentUserRole ?? '';
 
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
-    let isActive = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-    const fetchAssignments = async () => {
-      const response = await fetch(fetchUrl, {
-        headers: { Accept: 'application/json' },
-        credentials: 'same-origin',
-      });
-
-      if (!response.ok) {
-        throw new Error('Request failed');
+  const fetchNotifications = useCallback(
+    async (options: { showLoading?: boolean } = {}) => {
+      const { showLoading = true } = options;
+      if (showLoading) {
+        setIsLoading(true);
       }
 
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    };
+      const fetchAssignments = async () => {
+        const response = await fetch(fetchUrl, {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin',
+        });
 
-    const fetchSystemNotifications = async () => {
-      const response = await fetch('/api/notifications/feed', {
-        headers: { Accept: 'application/json' },
-        credentials: 'same-origin',
-      });
+        if (!response.ok) {
+          throw new Error('Request failed');
+        }
 
-      if (!response.ok) {
-        throw new Error('Request failed');
-      }
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      };
 
-      const payload = await response.json();
-      const list = Array.isArray(payload?.data) ? payload.data : [];
-      return list.map(transformSystemNotification(currentUserRole));
-    };
+      const fetchSystemNotifications = async () => {
+        const response = await fetch('/api/notifications/feed', {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin',
+        });
 
-    const fetchNotifications = async () => {
-      setIsLoading(true);
+        if (!response.ok) {
+          throw new Error('Request failed');
+        }
+
+        const payload = await response.json();
+        const list = Array.isArray(payload?.data) ? payload.data : [];
+        return list.map(transformSystemNotification(currentUserRole));
+      };
+
       try {
         const [assignments, systems] = await Promise.all([
           fetchAssignments(),
           fetchSystemNotifications(),
         ]);
-        if (isActive) {
-          setTaskItems(assignments);
-          setSystemItems(systems);
-          setError(null);
+
+        if (!isMountedRef.current) {
+          return;
         }
+
+        setTaskItems(assignments);
+        setSystemItems(systems);
+        setError(null);
       } catch (err) {
-        if (isActive) {
+        if (isMountedRef.current) {
           setError('Không thể tải thông báo');
         }
       } finally {
-        if (isActive) {
+        if (isMountedRef.current && showLoading) {
           setIsLoading(false);
         }
       }
-    };
+    },
+    [fetchUrl, currentUserRole]
+  );
 
+  useEffect(() => {
     fetchNotifications();
-    const intervalId = window.setInterval(fetchNotifications, pollInterval);
+    const intervalId = window.setInterval(() => fetchNotifications({ showLoading: false }), pollInterval);
 
     return () => {
-      isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [fetchUrl, pollInterval]);
+  }, [fetchNotifications, pollInterval]);
+
+  useEffect(() => {
+    const handleExternalRefresh = () => fetchNotifications({ showLoading: false });
+    window.addEventListener('notifications:refresh', handleExternalRefresh);
+    return () => window.removeEventListener('notifications:refresh', handleExternalRefresh);
+  }, [fetchNotifications]);
 
   const assignedLabel = (item: AssignmentNotification) => {
     const name = item.assigned_by?.name || 'Người giao không xác định';
@@ -183,6 +204,10 @@ export default function NotificationBell({
   const hasUnreadItems = useMemo(() => {
     return taskItems.some(item => !item.read_at) || systemItems.some(item => !item.read_at);
   }, [taskItems, systemItems]);
+
+  const broadcastRefresh = () => {
+    window.dispatchEvent(new CustomEvent('notifications:refresh'));
+  };
 
   const handleNotificationClick = async (taskId: number) => {
     setTaskItems(prev =>
@@ -208,6 +233,7 @@ export default function NotificationBell({
     }
 
     setIsOpen(false);
+    broadcastRefresh();
     window.location.assign(`/tasks?highlight_task=${taskId}`);
   };
 
@@ -244,6 +270,7 @@ export default function NotificationBell({
     } catch (err) {
       console.warn('Không thể đánh dấu thông báo hệ thống đã đọc', err);
     }
+    broadcastRefresh();
   };
 
   const handleMarkAllRead = async () => {
@@ -291,6 +318,7 @@ export default function NotificationBell({
           setSystemItems(prev => prev.map(item => (item.read_at ? item : { ...item, read_at: nowIso })));
         })(),
       ]);
+      broadcastRefresh();
     } catch (err) {
       console.warn('Không thể đánh dấu tất cả đã đọc', err);
     } finally {
